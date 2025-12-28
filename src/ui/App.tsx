@@ -601,15 +601,22 @@ Last API Call Cost:
             <Box key={i} flexDirection="column">
               <Box>
                 {tc.pending ? (
-                  <Text color="cyan">
-                    <Spinner type="dots" /> {tc.name}
-                  </Text>
+                  <>
+                    <Text color="yellow">
+                      <Spinner type="dots" />
+                    </Text>
+                    <Text color="cyan" bold> {tc.name}</Text>
+                    <Text color="gray">{formatArgs(tc.args)}</Text>
+                    <Text color="yellow" dimColor> Running...</Text>
+                  </>
                 ) : (
-                  <Text color={tc.success ? 'blue' : 'red'}>
-                    {tc.success ? '✓' : '✗'} {tc.name}
-                  </Text>
+                  <>
+                    <Text color={tc.success ? 'green' : 'red'}>
+                      {tc.success ? '✓' : '✗'} {tc.name}
+                    </Text>
+                    <Text color="gray">{formatArgs(tc.args)}</Text>
+                  </>
                 )}
-                <Text color="gray">{formatArgs(tc.args)}</Text>
               </Box>
               {!tc.pending && tc.result && (
                 <Box marginLeft={2}>

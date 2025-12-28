@@ -2566,7 +2566,150 @@ You can work with the local filesystem:
 - When writing code, follow existing patterns and conventions
 - For dangerous operations (rm, sudo), explain what you're doing
 
-You help users build trading bots and agents by combining coding skills with trading capabilities.`;
+You help users build trading bots and agents by combining coding skills with trading capabilities.
+
+## Building Standalone Trading Bots
+
+When users ask you to create trading bots or agents that run independently (not through this CLI), here's how to integrate with the Quantish MCP API:
+
+### MCP API Endpoint
+\`\`\`
+POST https://quantish-sdk-production.up.railway.app/mcp/execute
+\`\`\`
+
+### Authentication
+\`\`\`
+Header: x-api-key: <QUANTISH_API_KEY>
+\`\`\`
+The API key is stored in the user's environment as QUANTISH_API_KEY. Always read from env vars, never hardcode.
+
+### Request Format (JSON-RPC 2.0)
+\`\`\`javascript
+const response = await fetch('https://quantish-sdk-production.up.railway.app/mcp/execute', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'x-api-key': process.env.QUANTISH_API_KEY
+  },
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'tools/call',
+    params: { 
+      name: 'tool_name', 
+      arguments: { /* tool args */ } 
+    },
+    id: Date.now()
+  })
+});
+\`\`\`
+
+### Response Format
+\`\`\`javascript
+// Success response structure:
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "content": [{ 
+      "type": "text", 
+      "text": "{\\"key\\": \\"value\\"}"  // JSON string - parse this!
+    }]
+  },
+  "id": 123
+}
+
+// Parse the inner JSON:
+const data = await response.json();
+const result = JSON.parse(data.result.content[0].text);
+\`\`\`
+
+### Key Trading Tools (require QUANTISH_API_KEY)
+- \`get_balances\`: Returns { usdc, nativeUsdc, matic } for EOA and Safe wallets
+- \`get_positions\`: Returns array of current share holdings with market info
+- \`place_order\`: Place order. Args: { conditionId, tokenId, side: "BUY"|"SELL", price: 0.01-0.99, size: number }
+- \`cancel_order\`: Cancel order. Args: { orderId }
+- \`get_orders\`: List orders. Args: { status?: "LIVE"|"FILLED"|"CANCELLED" }
+- \`get_orderbook\`: Get bids/asks. Args: { tokenId }
+- \`get_price\`: Get midpoint price. Args: { tokenId }
+- \`get_deposit_addresses\`: Get addresses to fund wallet
+- \`transfer_usdc\`: Send USDC. Args: { toAddress, amount }
+
+### Key Discovery Tools (free, no auth required)
+Discovery uses a different endpoint with an embedded public key:
+\`\`\`
+POST https://quantish.live/mcp/execute
+Header: X-API-Key: qm_ueQeqrmvZyHtR1zuVbLYkhx0fKyVAuV8
+\`\`\`
+
+- \`search_markets\`: Find markets. Args: { query, limit?, platform?: "polymarket"|"kalshi"|"all" }
+- \`get_market_details\`: Get market info. Args: { platform, marketId }
+- \`get_trending_markets\`: Popular markets. Args: { limit?, platform? }
+- \`find_arbitrage\`: Find arb opportunities. Args: { minProfitPercent?, type? }
+
+### Important: Token IDs and Condition IDs
+When placing orders, you need:
+- \`conditionId\`: The market's condition ID (from market details)
+- \`tokenId\`: The specific outcome's token ID (YES or NO token from market.tokens array)
+
+Example flow:
+1. search_markets({ query: "bitcoin" }) \u2192 get market list
+2. get_market_details({ platform: "polymarket", marketId: "..." }) \u2192 get tokens array
+3. Extract tokenId for YES/NO outcome you want
+4. place_order({ conditionId, tokenId, side: "BUY", price: 0.55, size: 100 })
+
+### Bot Code Template (Node.js)
+\`\`\`javascript
+#!/usr/bin/env node
+require('dotenv').config();
+
+const MCP_URL = 'https://quantish-sdk-production.up.railway.app/mcp/execute';
+const API_KEY = process.env.QUANTISH_API_KEY;
+
+async function callTool(name, args = {}) {
+  const response = await fetch(MCP_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': API_KEY
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'tools/call',
+      params: { name, arguments: args },
+      id: Date.now()
+    })
+  });
+  
+  const data = await response.json();
+  if (data.error) throw new Error(data.error.message);
+  
+  try {
+    return JSON.parse(data.result.content[0].text);
+  } catch {
+    return data.result.content[0].text;
+  }
+}
+
+// Example: Monitor price and alert
+async function monitorPrice(tokenId, threshold) {
+  const result = await callTool('get_price', { tokenId });
+  console.log(\`Price: \${result.mid}\`);
+  if (parseFloat(result.mid) > threshold) {
+    console.log('ALERT: Price crossed threshold!');
+  }
+}
+
+// Run every 60 seconds
+setInterval(() => monitorPrice(process.env.TOKEN_ID, 0.5), 60000);
+\`\`\`
+
+### Bot Best Practices
+1. **Environment Variables**: Always use process.env for API keys
+2. **Error Handling**: Wrap all API calls in try/catch
+3. **Rate Limiting**: Poll at 30-60 second intervals minimum
+4. **Logging**: Log all trades with timestamps for debugging
+5. **Testing**: Test with small amounts first
+6. **Graceful Shutdown**: Handle SIGINT to clean up
+7. **.env.example**: Always create a template for required env vars`;
 var Agent = class {
   anthropic;
   mcpClient;
@@ -3092,7 +3235,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { Box, Text, useApp, useInput } from "ink";
 import TextInput from "ink-text-input";
 import Spinner from "ink-spinner";
-import { jsx, jsxs } from "react/jsx-runtime";
+import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 function formatTokenCount(count) {
   if (count < 1e3) return String(count);
   if (count < 1e5) return `${(count / 1e3).toFixed(1)}k`;
@@ -3569,18 +3712,22 @@ Stopped ${count} background process${count > 1 ? "es" : ""}.`);
       msg.role === "system" && /* @__PURE__ */ jsx(Box, { children: /* @__PURE__ */ jsx(Text, { color: "gray", italic: true, children: msg.content }) })
     ] }, i)) }),
     currentToolCalls.length > 0 && /* @__PURE__ */ jsx(Box, { flexDirection: "column", marginBottom: 1, marginLeft: 2, children: currentToolCalls.map((tc, i) => /* @__PURE__ */ jsxs(Box, { flexDirection: "column", children: [
-      /* @__PURE__ */ jsxs(Box, { children: [
-        tc.pending ? /* @__PURE__ */ jsxs(Text, { color: "cyan", children: [
-          /* @__PURE__ */ jsx(Spinner, { type: "dots" }),
+      /* @__PURE__ */ jsx(Box, { children: tc.pending ? /* @__PURE__ */ jsxs(Fragment, { children: [
+        /* @__PURE__ */ jsx(Text, { color: "yellow", children: /* @__PURE__ */ jsx(Spinner, { type: "dots" }) }),
+        /* @__PURE__ */ jsxs(Text, { color: "cyan", bold: true, children: [
           " ",
           tc.name
-        ] }) : /* @__PURE__ */ jsxs(Text, { color: tc.success ? "blue" : "red", children: [
+        ] }),
+        /* @__PURE__ */ jsx(Text, { color: "gray", children: formatArgs(tc.args) }),
+        /* @__PURE__ */ jsx(Text, { color: "yellow", dimColor: true, children: " Running..." })
+      ] }) : /* @__PURE__ */ jsxs(Fragment, { children: [
+        /* @__PURE__ */ jsxs(Text, { color: tc.success ? "green" : "red", children: [
           tc.success ? "\u2713" : "\u2717",
           " ",
           tc.name
         ] }),
         /* @__PURE__ */ jsx(Text, { color: "gray", children: formatArgs(tc.args) })
-      ] }),
+      ] }) }),
       !tc.pending && tc.result && /* @__PURE__ */ jsx(Box, { marginLeft: 2, children: /* @__PURE__ */ jsxs(Text, { color: "gray", dimColor: true, children: [
         "\u2192 ",
         formatResult(tc.result, 100)
