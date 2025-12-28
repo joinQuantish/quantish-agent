@@ -428,12 +428,27 @@ const result = JSON.parse(data.result.content[0].text);
 - \`transfer_usdc\`: Send USDC. Args: { toAddress, amount }
 
 ### Key Discovery Tools (free, no auth required)
-Discovery uses a different endpoint with an embedded public key:
-\`\`\`
-POST https://quantish.live/mcp/execute
-Header: X-API-Key: qm_ueQeqrmvZyHtR1zuVbLYkhx0fKyVAuV8
+Discovery uses a SIMPLER request format (not full JSON-RPC):
+\`\`\`javascript
+// Discovery API - uses simple { name, arguments } format
+const response = await fetch('https://quantish.live/mcp/execute', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-API-Key': 'qm_ueQeqrmvZyHtR1zuVbLYkhx0fKyVAuV8'
+  },
+  body: JSON.stringify({
+    name: 'search_markets',        // Tool name at top level
+    arguments: { query: 'bitcoin', limit: 5 }  // Arguments at top level
+  })
+});
+
+// Response is still JSON-RPC wrapped:
+const data = await response.json();
+const result = JSON.parse(data.result.content[0].text);
 \`\`\`
 
+Available Discovery Tools:
 - \`search_markets\`: Find markets. Args: { query, limit?, platform?: "polymarket"|"kalshi"|"all" }
 - \`get_market_details\`: Get market info. Args: { platform, marketId }
 - \`get_trending_markets\`: Popular markets. Args: { limit?, platform? }
@@ -560,29 +575,25 @@ console.log('Order placed:', orderResult.orderId);
 ### SIMPLE EXAMPLE - Copy This Pattern Exactly
 
 \`\`\`javascript
-// Simple bot that searches markets - CORRECT PATTERN
+// Simple bot that searches markets using Discovery API (free, no auth)
 require('dotenv').config();
 
-async function callTool(name, args = {}) {
+// Discovery API uses SIMPLE format: { name, arguments }
+async function callDiscovery(name, args = {}) {
   const res = await fetch('https://quantish.live/mcp/execute', {
     method: 'POST',
     headers: { 
       'Content-Type': 'application/json',
-      'X-API-Key': 'qm_ueQeqrmvZyHtR1zuVbLYkhx0fKyVAuV8'
+      'X-API-Key': 'qm_ueQeqrmvZyHtR1zuVbLYkhx0fKyVAuV8'  // Public key
     },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      method: 'tools/call',
-      params: { name, arguments: args },
-      id: 1
-    })
+    body: JSON.stringify({ name, arguments: args })  // Simple format!
   });
   const data = await res.json();
   return JSON.parse(data.result.content[0].text);
 }
 
 // Use it!
-const markets = await callTool('search_markets', { query: 'bitcoin', limit: 5 });
+const markets = await callDiscovery('search_markets', { query: 'bitcoin', limit: 5 });
 console.log(markets);
 \`\`\`
 
@@ -650,6 +661,7 @@ async function callTradingTool(name, args = {}) {
 
 /**
  * Call a discovery tool (no auth required)
+ * Uses SIMPLE format: { name, arguments } - NOT full JSON-RPC
  * Tools: search_markets, get_market_details, get_trending_markets, find_arbitrage
  */
 async function callDiscoveryTool(name, args = {}) {
@@ -659,12 +671,7 @@ async function callDiscoveryTool(name, args = {}) {
       'Content-Type': 'application/json',
       'X-API-Key': DISCOVERY_API_KEY
     },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      method: 'tools/call',
-      params: { name, arguments: args },
-      id: Date.now()
-    })
+    body: JSON.stringify({ name, arguments: args })  // Simple format for Discovery!
   });
   
   const data = await response.json();
