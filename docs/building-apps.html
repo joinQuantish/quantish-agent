@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Building Applications - Quantish Agent</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+  
+  <div class="layout">
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">QUANTISH</div>
+        <div class="logo-subtitle">AI Trading Agent</div>
+      </div>
+      
+      <ul class="nav-tree">
+        <li><a href="index.html"><span class="nav-prefix">○</span> Overview</a></li>
+        <li><a href="getting-started.html"><span class="nav-prefix">├</span> Getting Started</a></li>
+        <li><a href="commands.html"><span class="nav-prefix">├</span> Commands</a></li>
+        <li><a href="tools.html"><span class="nav-prefix">├</span> Tools</a></li>
+        <li><a href="building-apps.html" class="active"><span class="nav-prefix">❯</span> Building Apps</a></li>
+      </ul>
+      
+      <div class="nav-section">Resources</div>
+      <ul class="nav-tree">
+        <li><a href="https://github.com/joinQuantish/quantish-agent" target="_blank"><span class="nav-prefix">○</span> GitHub</a></li>
+        <li><a href="https://www.npmjs.com/package/@quantish/agent" target="_blank"><span class="nav-prefix">○</span> NPM</a></li>
+        <li><a href="https://quantish.live" target="_blank"><span class="nav-prefix">○</span> quantish.live</a></li>
+      </ul>
+    </nav>
+
+    <main class="main">
+      <h1>Building Applications</h1>
+      
+      <p>The real power of Quantish Agent is combining coding tools with trading tools to build <strong>any application</strong> that interacts with prediction markets. Trading bots, web dashboards, mobile backends, notification services, analytics tools, Discord bots, and more.</p>
+
+      <h2>What You Can Build</h2>
+
+      <div class="feature-grid">
+        <div class="feature-card">
+          <h4>🤖 Trading Bots</h4>
+          <p>Automated trading based on price thresholds, trends, or external signals.</p>
+        </div>
+        <div class="feature-card">
+          <h4>📊 Web Dashboards</h4>
+          <p>React/Next.js apps displaying market data, portfolio, and analytics.</p>
+        </div>
+        <div class="feature-card">
+          <h4>🔔 Alert Systems</h4>
+          <p>Notifications via email, SMS, Discord, Telegram when prices move.</p>
+        </div>
+        <div class="feature-card">
+          <h4>📱 Mobile Backends</h4>
+          <p>API servers that power iOS/Android prediction market apps.</p>
+        </div>
+        <div class="feature-card">
+          <h4>📈 Analytics Tools</h4>
+          <p>Scripts that analyze historical prices, trends, and patterns.</p>
+        </div>
+        <div class="feature-card">
+          <h4>💹 Arbitrage Scanners</h4>
+          <p>Tools that find price discrepancies across platforms.</p>
+        </div>
+      </div>
+
+      <h2>The MCP API</h2>
+
+      <p>All applications use the Quantish MCP API. There are two endpoints:</p>
+
+      <div class="callout">
+        <div class="callout-title">Trading API (requires your API key)</div>
+        <pre><code>POST https://quantish-sdk-production.up.railway.app/mcp/execute
+Header: x-api-key: YOUR_QUANTISH_API_KEY</code></pre>
+        <p>Used for: balances, positions, orders, trading</p>
+      </div>
+
+      <div class="callout">
+        <div class="callout-title">Discovery API (free, public)</div>
+        <pre><code>POST https://quantish.live/mcp/execute
+Header: X-API-Key: qm_ueQeqrmvZyHtR1zuVbLYkhx0fKyVAuV8</code></pre>
+        <p>Used for: searching markets, trending data, arbitrage scanning</p>
+      </div>
+
+      <h2>Universal Code Template</h2>
+
+      <p>Every application you build should start with this template:</p>
+
+      <pre><code>#!/usr/bin/env node
+require('dotenv').config();
+
+// ============================================
+// MCP Configuration
+// ============================================
+const TRADING_MCP_URL = 'https://quantish-sdk-production.up.railway.app/mcp/execute';
+const DISCOVERY_MCP_URL = 'https://quantish.live/mcp/execute';
+const DISCOVERY_API_KEY = 'qm_ueQeqrmvZyHtR1zuVbLYkhx0fKyVAuV8';
+
+// Validate API key
+if (!process.env.QUANTISH_API_KEY) {
+  console.error('ERROR: QUANTISH_API_KEY required');
+  console.error('Get your key at: https://quantish.live');
+  process.exit(1);
+}
+
+// ============================================
+// MCP Helper Functions
+// ============================================
+
+async function callTradingTool(name, args = {}) {
+  const response = await fetch(TRADING_MCP_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': process.env.QUANTISH_API_KEY
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'tools/call',
+      params: { name, arguments: args },
+      id: Date.now()
+    })
+  });
+  
+  const data = await response.json();
+  if (data.error) throw new Error(data.error.message);
+  
+  try {
+    return JSON.parse(data.result.content[0].text);
+  } catch {
+    return data.result.content[0].text;
+  }
+}
+
+async function callDiscoveryTool(name, args = {}) {
+  const response = await fetch(DISCOVERY_MCP_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-API-Key': DISCOVERY_API_KEY
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'tools/call',
+      params: { name, arguments: args },
+      id: Date.now()
+    })
+  });
+  
+  const data = await response.json();
+  if (data.error) throw new Error(data.error.message);
+  
+  try {
+    return JSON.parse(data.result.content[0].text);
+  } catch {
+    return data.result.content[0].text;
+  }
+}
+
+// ============================================
+// Your Application Code
+// ============================================
+
+async function main() {
+  // Your code here...
+}
+
+main().catch(console.error);</code></pre>
+
+      <h2>Example: Ask the Agent</h2>
+
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line">
+            <span class="terminal-prompt">You:</span>
+            <span class="terminal-command"> Build a Discord bot that responds to /market commands with current prices for any market</span>
+          </div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-output">I'll create a Discord bot that queries prediction markets...</div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-output">✓ write_file(path: "discord-bot/package.json")</div>
+          <div class="terminal-line terminal-output">✓ write_file(path: "discord-bot/index.js")</div>
+          <div class="terminal-line terminal-output">✓ write_file(path: "discord-bot/.env.example")</div>
+          <div class="terminal-line terminal-output">✓ write_file(path: "discord-bot/README.md")</div>
+          <div class="terminal-line terminal-success">Created discord-bot/ with 4 files!</div>
+        </div>
+      </div>
+
+      <h2>Example: Web Dashboard</h2>
+
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line">
+            <span class="terminal-prompt">You:</span>
+            <span class="terminal-command"> Create a React dashboard that shows my portfolio value, open positions, and recent trades</span>
+          </div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-output">I'll create a React dashboard with portfolio tracking...</div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-output">✓ shell_command(npx create-vite dashboard --template react)</div>
+          <div class="terminal-line terminal-output">✓ write_file(path: "dashboard/src/App.jsx")</div>
+          <div class="terminal-line terminal-output">✓ write_file(path: "dashboard/src/api/quantish.js")</div>
+          <div class="terminal-line terminal-output">✓ write_file(path: "dashboard/src/components/Portfolio.jsx")</div>
+          <div class="terminal-line terminal-success">Dashboard created!</div>
+        </div>
+      </div>
+
+      <h2>Example: Trading Bot</h2>
+
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line">
+            <span class="terminal-prompt">You:</span>
+            <span class="terminal-command"> Create a trading bot that:</span>
+          </div>
+          <div class="terminal-line terminal-command">1. Monitors my positions every 30 seconds</div>
+          <div class="terminal-line terminal-command">2. Sells when profit exceeds 20%</div>
+          <div class="terminal-line terminal-command">3. Sends Telegram notifications on trades</div>
+        </div>
+      </div>
+
+      <div class="callout warning">
+        <div class="callout-title">⚠️ Trading Risk</div>
+        <p>Automated trading carries risk. Test with small amounts first. The agent helps you build the code - you're responsible for the trading decisions.</p>
+      </div>
+
+      <h2>Available Tools</h2>
+
+      <h3>Trading Tools (require API key)</h3>
+      <ul>
+        <li><code>get_balances</code> - Wallet balances (USDC, MATIC)</li>
+        <li><code>get_positions</code> - Current share holdings</li>
+        <li><code>place_order</code> - Place buy/sell orders</li>
+        <li><code>cancel_order</code> - Cancel open orders</li>
+        <li><code>get_orders</code> - List orders by status</li>
+        <li><code>get_orderbook</code> - Bids and asks</li>
+        <li><code>get_price</code> - Midpoint price for a token</li>
+        <li><code>transfer_usdc</code> - Send USDC to another address</li>
+      </ul>
+
+      <h3>Discovery Tools (free)</h3>
+      <ul>
+        <li><code>search_markets</code> - Find markets by keyword</li>
+        <li><code>get_market_details</code> - Full market info</li>
+        <li><code>get_trending_markets</code> - Popular markets</li>
+        <li><code>find_arbitrage</code> - Price discrepancies</li>
+      </ul>
+
+      <h2>Best Practices</h2>
+
+      <div class="feature-grid">
+        <div class="feature-card">
+          <h4>🔐 Environment Variables</h4>
+          <p>Never hardcode API keys. Always use <code>process.env</code> and <code>.env</code> files.</p>
+        </div>
+        <div class="feature-card">
+          <h4>📁 .env.example</h4>
+          <p>Always create a template so others know what variables are needed.</p>
+        </div>
+        <div class="feature-card">
+          <h4>🔒 Error Handling</h4>
+          <p>Wrap all API calls in try/catch. Network errors happen.</p>
+        </div>
+        <div class="feature-card">
+          <h4>⏱️ Rate Limiting</h4>
+          <p>Don't poll too frequently. 30-60 second intervals are sufficient.</p>
+        </div>
+      </div>
+
+      <div class="footer">
+        <p>Built by <a href="https://quantish.live">Quantish</a> • <a href="https://github.com/joinQuantish/quantish-agent">GitHub</a> • MIT License</p>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
+

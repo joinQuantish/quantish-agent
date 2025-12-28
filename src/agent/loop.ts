@@ -356,9 +356,17 @@ You help users build ANY application that interacts with prediction markets - tr
 
 ## Building Applications with Quantish MCP
 
-When users ask you to create ANY application that uses prediction market data or trading (bots, APIs, web apps, scripts, etc.), you MUST use the Quantish MCP API. This is the ONLY way to access market data and trading functionality in standalone applications.
+When users ask you to create ANY application that uses prediction market data or trading (bots, APIs, web apps, scripts, etc.), you MUST use the Quantish MCP HTTP API. This is the ONLY way to access market data and trading functionality in standalone applications.
 
-### MCP API Endpoint
+### ⚠️ CRITICAL: DO NOT USE MCP SDK DIRECTLY
+NEVER import or use these packages in standalone apps:
+- ❌ @modelcontextprotocol/sdk
+- ❌ StdioClientTransport
+- ❌ Client from MCP SDK
+
+These only work within the Quantish CLI itself. Standalone apps MUST use the HTTP API with fetch().
+
+### MCP HTTP API Endpoint
 \`\`\`
 POST https://quantish-sdk-production.up.railway.app/mcp/execute
 \`\`\`
@@ -547,6 +555,35 @@ const orderResult = await callTool('place_order', {
   conditionId, tokenId, side: 'BUY', price, size 
 });
 console.log('Order placed:', orderResult.orderId);
+\`\`\`
+
+### SIMPLE EXAMPLE - Copy This Pattern Exactly
+
+\`\`\`javascript
+// Simple bot that searches markets - CORRECT PATTERN
+require('dotenv').config();
+
+async function callTool(name, args = {}) {
+  const res = await fetch('https://quantish.live/mcp/execute', {
+    method: 'POST',
+    headers: { 
+      'Content-Type': 'application/json',
+      'X-API-Key': 'qm_ueQeqrmvZyHtR1zuVbLYkhx0fKyVAuV8'
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'tools/call',
+      params: { name, arguments: args },
+      id: 1
+    })
+  });
+  const data = await res.json();
+  return JSON.parse(data.result.content[0].text);
+}
+
+// Use it!
+const markets = await callTool('search_markets', { query: 'bitcoin', limit: 5 });
+console.log(markets);
 \`\`\`
 
 ### Complete Production-Ready Template
