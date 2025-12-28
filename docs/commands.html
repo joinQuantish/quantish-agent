@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Commands - Quantish Agent</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+  
+  <div class="layout">
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">QUANTISH</div>
+        <div class="logo-subtitle">AI Trading Agent</div>
+      </div>
+      
+      <ul class="nav-tree">
+        <li><a href="index.html"><span class="nav-prefix">○</span> Overview</a></li>
+        <li><a href="getting-started.html"><span class="nav-prefix">├</span> Getting Started</a></li>
+        <li><a href="commands.html" class="active"><span class="nav-prefix">❯</span> Commands</a></li>
+        <li><a href="tools.html"><span class="nav-prefix">├</span> Tools</a></li>
+        <li><a href="building-bots.html"><span class="nav-prefix">└</span> Building Bots</a></li>
+      </ul>
+      
+      <div class="nav-section">Resources</div>
+      <ul class="nav-tree">
+        <li><a href="https://github.com/joinQuantish/quantish-agent" target="_blank"><span class="nav-prefix">○</span> GitHub</a></li>
+        <li><a href="https://www.npmjs.com/package/@quantish/agent" target="_blank"><span class="nav-prefix">○</span> NPM</a></li>
+        <li><a href="https://quantish.live" target="_blank"><span class="nav-prefix">○</span> quantish.live</a></li>
+      </ul>
+    </nav>
+
+    <main class="main">
+      <h1>Commands Reference</h1>
+      
+      <p>Quantish Agent supports both CLI arguments and interactive slash commands.</p>
+
+      <h2>CLI Commands</h2>
+
+      <div class="command">
+        <div class="command-name">quantish</div>
+        <div class="command-desc">Start interactive chat mode. This is the main way to use the agent.</div>
+      </div>
+
+      <div class="command">
+        <div class="command-name">quantish init</div>
+        <div class="command-desc">Run the setup wizard to configure API keys and create your wallet.</div>
+      </div>
+
+      <div class="command">
+        <div class="command-name">quantish config</div>
+        <div class="command-desc">View your current configuration (keys are masked).</div>
+      </div>
+
+      <div class="command">
+        <div class="command-name">quantish config --export</div>
+        <div class="command-desc">Export configuration as environment variables for your bots.</div>
+      </div>
+
+      <div class="command">
+        <div class="command-name">quantish tools</div>
+        <div class="command-desc">List all available tools (local + MCP trading tools).</div>
+      </div>
+
+      <div class="command">
+        <div class="command-name">quantish -p "your prompt"</div>
+        <div class="command-desc">Run a single prompt in one-shot mode. Useful for scripts.</div>
+      </div>
+
+      <h3>CLI Options</h3>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Option</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>-p, --prompt</code></td>
+            <td>Run a single prompt and exit</td>
+          </tr>
+          <tr>
+            <td><code>-v, --verbose</code></td>
+            <td>Show detailed tool call information</td>
+          </tr>
+          <tr>
+            <td><code>--no-mcp</code></td>
+            <td>Disable trading tools (MCP)</td>
+          </tr>
+          <tr>
+            <td><code>--no-local</code></td>
+            <td>Disable local tools (filesystem, shell)</td>
+          </tr>
+          <tr>
+            <td><code>--version</code></td>
+            <td>Show version number</td>
+          </tr>
+          <tr>
+            <td><code>--help</code></td>
+            <td>Show help message</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Interactive Slash Commands</h2>
+
+      <p>While in interactive mode, use these commands:</p>
+
+      <div class="command">
+        <div class="command-name">/help</div>
+        <div class="command-desc">Show all available slash commands and keyboard shortcuts.</div>
+      </div>
+
+      <div class="command">
+        <div class="command-name">/clear</div>
+        <div class="command-desc">Clear conversation history and reset token count. Start fresh.</div>
+      </div>
+
+      <div class="command">
+        <div class="command-name">/compact</div>
+        <div class="command-desc">Summarize the conversation to save tokens. Uses Claude to create a concise summary while preserving key information. Use when token count gets high.</div>
+      </div>
+
+      <div class="command">
+        <div class="command-name">/model [name]</div>
+        <div class="command-desc">Switch AI model. Options: <code>opus</code>, <code>sonnet</code>, <code>haiku</code>. Without argument, shows current model and available options.</div>
+      </div>
+
+      <div class="command">
+        <div class="command-name">/cost</div>
+        <div class="command-desc">Show detailed cost breakdown: session total, input/output tokens, cache usage.</div>
+      </div>
+
+      <div class="command">
+        <div class="command-name">/tools</div>
+        <div class="command-desc">List all available tools (shortcut to CLI command).</div>
+      </div>
+
+      <div class="command">
+        <div class="command-name">/config</div>
+        <div class="command-desc">Show configuration info.</div>
+      </div>
+
+      <div class="command">
+        <div class="command-name">/processes</div>
+        <div class="command-desc">List running background processes with their IDs and uptime.</div>
+      </div>
+
+      <div class="command">
+        <div class="command-name">/stop [id]</div>
+        <div class="command-desc">Stop a background process by its ID.</div>
+      </div>
+
+      <div class="command">
+        <div class="command-name">/stopall</div>
+        <div class="command-desc">Stop all running background processes.</div>
+      </div>
+
+      <div class="command">
+        <div class="command-name">/exit</div>
+        <div class="command-desc">Exit the agent (also stops all background processes).</div>
+      </div>
+
+      <h2>Keyboard Shortcuts</h2>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Shortcut</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>Enter</code></td>
+            <td>Send message</td>
+          </tr>
+          <tr>
+            <td><code>Escape</code></td>
+            <td>Interrupt current generation</td>
+          </tr>
+          <tr>
+            <td><code>Ctrl+C</code></td>
+            <td>Exit the agent (stops all processes)</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Model Selection</h2>
+
+      <p>Switch between Claude models based on your needs:</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Model</th>
+            <th>Input</th>
+            <th>Output</th>
+            <th>Best For</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>opus</code></td>
+            <td>$5/MTok</td>
+            <td>$25/MTok</td>
+            <td>Complex reasoning, creative tasks</td>
+          </tr>
+          <tr>
+            <td><code>sonnet</code></td>
+            <td>$3/MTok</td>
+            <td>$15/MTok</td>
+            <td>Balanced performance (default)</td>
+          </tr>
+          <tr>
+            <td><code>haiku</code></td>
+            <td>$1/MTok</td>
+            <td>$5/MTok</td>
+            <td>Simple tasks, high volume</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line">
+            <span class="terminal-prompt">You:</span>
+            <span class="terminal-command"> /model haiku</span>
+          </div>
+          <div class="terminal-line terminal-success">✓ Switched to Claude Haiku 4.5</div>
+          <div class="terminal-line terminal-output">   Fastest and most economical. Good for simple tasks.</div>
+        </div>
+      </div>
+
+      <h2>Cost Tracking</h2>
+
+      <p>The status bar shows real-time cost and token usage:</p>
+
+      <pre><code>↵ Send • Esc interrupt • /help commands    $0.0518 • ~1.9k tokens • ✓ Ready</code></pre>
+
+      <p>Use <code>/cost</code> for detailed breakdown:</p>
+
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line">
+            <span class="terminal-prompt">You:</span>
+            <span class="terminal-command"> /cost</span>
+          </div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-output">💰 Session Cost: $0.0518</div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-output">Token Usage (current context):</div>
+          <div class="terminal-line terminal-output">  Input:        1.9k tokens</div>
+          <div class="terminal-line terminal-output">  Output:       847 tokens</div>
+          <div class="terminal-line terminal-output">  Cache Write:  0 tokens</div>
+          <div class="terminal-line terminal-output">  Cache Read:   1.2k tokens</div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-output">💡 Tip: Use /model haiku for cheaper operations</div>
+        </div>
+      </div>
+
+      <div class="footer">
+        <p>Built by <a href="https://quantish.live">Quantish</a> • <a href="https://github.com/joinQuantish/quantish-agent">GitHub</a> • MIT License</p>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
+

@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quantish Agent - AI Trading Agent for Polymarket</title>
+  <link rel="stylesheet" href="css/style.css">
+  <meta name="description" content="AI-powered agent for building trading bots on Polymarket. Powered by Claude AI.">
+</head>
+<body>
+  <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+  
+  <div class="layout">
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">QUANTISH</div>
+        <div class="logo-subtitle">AI Trading Agent</div>
+      </div>
+      
+      <ul class="nav-tree">
+        <li><a href="index.html" class="active"><span class="nav-prefix">❯</span> Overview</a></li>
+        <li><a href="getting-started.html"><span class="nav-prefix">├</span> Getting Started</a></li>
+        <li><a href="commands.html"><span class="nav-prefix">├</span> Commands</a></li>
+        <li><a href="tools.html"><span class="nav-prefix">├</span> Tools</a></li>
+        <li><a href="building-bots.html"><span class="nav-prefix">└</span> Building Bots</a></li>
+      </ul>
+      
+      <div class="nav-section">Resources</div>
+      <ul class="nav-tree">
+        <li><a href="https://github.com/joinQuantish/quantish-agent" target="_blank"><span class="nav-prefix">○</span> GitHub</a></li>
+        <li><a href="https://www.npmjs.com/package/@quantish/agent" target="_blank"><span class="nav-prefix">○</span> NPM</a></li>
+        <li><a href="https://quantish.live" target="_blank"><span class="nav-prefix">○</span> quantish.live</a></li>
+      </ul>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main">
+      <pre class="ascii-header">
+ ██████╗ ██╗   ██╗ █████╗ ███╗   ██╗████████╗██╗███████╗██╗  ██╗
+██╔═══██╗██║   ██║██╔══██╗████╗  ██║╚══██╔══╝██║██╔════╝██║  ██║
+██║   ██║██║   ██║███████║██╔██╗ ██║   ██║   ██║███████╗███████║
+██║▄▄ ██║██║   ██║██╔══██║██║╚██╗██║   ██║   ██║╚════██║██╔══██║
+╚██████╔╝╚██████╔╝██║  ██║██║ ╚████║   ██║   ██║███████║██║  ██║
+ ╚══▀▀═╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝   ╚═╝╚══════╝╚═╝  ╚═╝
+      </pre>
+
+      <h1>Quantish Agent</h1>
+      
+      <p>AI-powered agent for building trading bots on Polymarket. Combines <strong>coding tools</strong> (filesystem, shell, git) with <strong>trading tools</strong> (orders, positions, balances) powered by Claude AI.</p>
+
+      <!-- Quick Install -->
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line">
+            <span class="terminal-prompt">$</span>
+            <span class="terminal-command"> npm install -g @quantish/agent</span>
+          </div>
+          <div class="terminal-line">
+            <span class="terminal-prompt">$</span>
+            <span class="terminal-command"> quantish init</span>
+          </div>
+          <div class="terminal-line terminal-output">✓ Anthropic API key configured</div>
+          <div class="terminal-line terminal-output">✓ Quantish wallet created</div>
+          <div class="terminal-line terminal-success">Ready to trade!</div>
+          <div class="terminal-line">
+            <span class="terminal-prompt">$</span>
+            <span class="terminal-command"> quantish</span>
+          </div>
+        </div>
+      </div>
+
+      <p style="margin-top: 24px;">
+        <a href="getting-started.html" class="btn">Get Started</a>
+        <a href="https://github.com/joinQuantish/quantish-agent" class="btn btn-outline" style="margin-left: 12px;">View on GitHub</a>
+      </p>
+
+      <h2>Features</h2>
+
+      <div class="feature-grid">
+        <div class="feature-card">
+          <h4>🤖 Claude AI Powered</h4>
+          <p>Uses Claude Sonnet, Opus, or Haiku. Switch models on the fly with /model.</p>
+        </div>
+        <div class="feature-card">
+          <h4>💰 Real Cost Tracking</h4>
+          <p>See exactly what you're spending per API call with accurate token counting.</p>
+        </div>
+        <div class="feature-card">
+          <h4>📊 Polymarket Trading</h4>
+          <p>Place orders, check positions, manage your portfolio through natural language.</p>
+        </div>
+        <div class="feature-card">
+          <h4>💻 Full Coding Tools</h4>
+          <p>Read/write files, run commands, git operations - build bots directly.</p>
+        </div>
+        <div class="feature-card">
+          <h4>🔄 Background Processes</h4>
+          <p>Run long-running tasks in background with live output tracking.</p>
+        </div>
+        <div class="feature-card">
+          <h4>🧠 Context Management</h4>
+          <p>Smart token optimization with /compact to summarize long conversations.</p>
+        </div>
+      </div>
+
+      <h2>How It Works</h2>
+
+      <p>Quantish connects to two backend services:</p>
+
+      <div class="callout info">
+        <div class="callout-title">Discovery MCP</div>
+        <p>Free, read-only access to prediction market data across Polymarket, Kalshi, and more. Uses an embedded public API key - no setup required.</p>
+      </div>
+
+      <div class="callout warning">
+        <div class="callout-title">Trading MCP</div>
+        <p>Your personal trading wallet for Polymarket. Created during <code>quantish init</code> with your own API key. Gasless trading - Polymarket covers all fees.</p>
+      </div>
+
+      <h2>Example Session</h2>
+
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line">
+            <span class="terminal-prompt">You:</span>
+            <span class="terminal-command"> find trump markets</span>
+          </div>
+          <div class="terminal-line terminal-output">✓ search_markets(query: "trump", limit: 10)</div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-output">Found 10 Trump-related markets:</div>
+          <div class="terminal-line terminal-output">1. Who will Trump nominate as Fed Chair? - $91M volume</div>
+          <div class="terminal-line terminal-output">2. Trump Bitcoin Reserve in 2025? - 2% YES</div>
+          <div class="terminal-line terminal-output">...</div>
+          <div class="terminal-line">&nbsp;</div>
+          <div class="terminal-line">
+            <span class="terminal-prompt">You:</span>
+            <span class="terminal-command"> buy $10 YES on the bitcoin reserve market</span>
+          </div>
+          <div class="terminal-line terminal-output">✓ place_order(side: "BUY", price: 0.02, size: 500)</div>
+          <div class="terminal-line terminal-success">Order placed! 500 shares at $0.02</div>
+        </div>
+      </div>
+
+      <h2>Platform Support</h2>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Platform</th>
+            <th>Support</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>macOS</td>
+            <td style="color: var(--green);">✓ Full support</td>
+          </tr>
+          <tr>
+            <td>Linux</td>
+            <td style="color: var(--green);">✓ Full support</td>
+          </tr>
+          <tr>
+            <td>Windows</td>
+            <td style="color: var(--yellow);">⚠ Requires WSL</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="footer">
+        <p>Built by <a href="https://quantish.live">Quantish</a> • <a href="https://github.com/joinQuantish/quantish-agent">GitHub</a> • MIT License</p>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
+

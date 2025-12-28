@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Building Trading Bots - Quantish Agent</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+  
+  <div class="layout">
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">QUANTISH</div>
+        <div class="logo-subtitle">AI Trading Agent</div>
+      </div>
+      
+      <ul class="nav-tree">
+        <li><a href="index.html"><span class="nav-prefix">○</span> Overview</a></li>
+        <li><a href="getting-started.html"><span class="nav-prefix">├</span> Getting Started</a></li>
+        <li><a href="commands.html"><span class="nav-prefix">├</span> Commands</a></li>
+        <li><a href="tools.html"><span class="nav-prefix">├</span> Tools</a></li>
+        <li><a href="building-bots.html" class="active"><span class="nav-prefix">❯</span> Building Bots</a></li>
+      </ul>
+      
+      <div class="nav-section">Resources</div>
+      <ul class="nav-tree">
+        <li><a href="https://github.com/joinQuantish/quantish-agent" target="_blank"><span class="nav-prefix">○</span> GitHub</a></li>
+        <li><a href="https://www.npmjs.com/package/@quantish/agent" target="_blank"><span class="nav-prefix">○</span> NPM</a></li>
+        <li><a href="https://quantish.live" target="_blank"><span class="nav-prefix">○</span> quantish.live</a></li>
+      </ul>
+    </nav>
+
+    <main class="main">
+      <h1>Building Trading Bots</h1>
+      
+      <p>The real power of Quantish Agent is combining coding tools with trading tools to build automated trading systems. This guide walks you through creating your first bot.</p>
+
+      <h2>Export Your Credentials</h2>
+
+      <p>First, export your API keys for use in standalone scripts:</p>
+
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line">
+            <span class="terminal-prompt">$</span>
+            <span class="terminal-command"> quantish config --export</span>
+          </div>
+          <div class="terminal-line terminal-output">ANTHROPIC_API_KEY=sk-ant-api03-...</div>
+          <div class="terminal-line terminal-output">QUANTISH_API_KEY=pk_live_...</div>
+          <div class="terminal-line terminal-output">QUANTISH_MCP_URL=https://quantish-sdk-production.up.railway.app/mcp</div>
+        </div>
+      </div>
+
+      <p>Add these to your <code>.env</code> file or export them in your shell.</p>
+
+      <h2>Tutorial: Price Alert Bot</h2>
+
+      <p>Let's build a bot that monitors a market and alerts when price crosses a threshold.</p>
+
+      <h3>Step 1: Ask the Agent</h3>
+
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line">
+            <span class="terminal-prompt">You:</span>
+            <span class="terminal-command"> Create a Node.js script that monitors the Trump Bitcoin Reserve market and logs when the YES price goes above 5%</span>
+          </div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-output">I'll create that monitoring script for you. Let me first get the market details...</div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-output">✓ search_markets(query: "trump bitcoin reserve")</div>
+          <div class="terminal-line terminal-output">✓ write_file(path: "price-monitor.js")</div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-success">Created price-monitor.js!</div>
+        </div>
+      </div>
+
+      <h3>Step 2: Review the Code</h3>
+
+      <p>The agent creates something like this:</p>
+
+      <pre><code>// price-monitor.js
+// Monitors Trump Bitcoin Reserve market
+
+const QUANTISH_API_KEY = process.env.QUANTISH_API_KEY;
+const MCP_URL = 'https://quantish-sdk-production.up.railway.app/mcp';
+const TOKEN_ID = '123456789...'; // YES token
+const THRESHOLD = 0.05; // 5%
+
+async function callMCP(tool, args) {
+  const response = await fetch(`${MCP_URL}/execute`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': QUANTISH_API_KEY
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'tools/call',
+      params: { name: tool, arguments: args },
+      id: Date.now()
+    })
+  });
+  return response.json();
+}
+
+async function checkPrice() {
+  const result = await callMCP('get_price', { tokenId: TOKEN_ID });
+  const price = parseFloat(result.result?.content?.[0]?.text || '0');
+  
+  console.log(`[${new Date().toISOString()}] Price: ${(price * 100).toFixed(2)}%`);
+  
+  if (price > THRESHOLD) {
+    console.log('🚨 ALERT: Price crossed threshold!');
+    // Add notification logic here (Telegram, Discord, etc.)
+  }
+}
+
+// Check every 60 seconds
+setInterval(checkPrice, 60000);
+checkPrice();</code></pre>
+
+      <h3>Step 3: Run It</h3>
+
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line">
+            <span class="terminal-prompt">You:</span>
+            <span class="terminal-command"> run it in the background</span>
+          </div>
+          <div class="terminal-line terminal-output">✓ start_background_process(command: "node price-monitor.js")</div>
+          <div class="terminal-line terminal-success">Started process [1]: price-monitor (PID: 12345)</div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-output">[2024-12-28T12:00:00Z] Price: 2.34%</div>
+        </div>
+      </div>
+
+      <h2>Tutorial: Auto-Trading Bot</h2>
+
+      <p>A more advanced bot that automatically places orders based on conditions.</p>
+
+      <div class="callout warning">
+        <div class="callout-title">⚠️ Risk Warning</div>
+        <p>Automated trading carries risk. Start with small amounts and thoroughly test your logic. The agent can help you build bots, but you're responsible for the trading decisions they make.</p>
+      </div>
+
+      <h3>Ask the Agent</h3>
+
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line">
+            <span class="terminal-prompt">You:</span>
+            <span class="terminal-command"> Create a trading bot that:</span>
+          </div>
+          <div class="terminal-line">
+            <span class="terminal-command">1. Monitors my positions</span>
+          </div>
+          <div class="terminal-line">
+            <span class="terminal-command">2. Sells when profit exceeds 20%</span>
+          </div>
+          <div class="terminal-line">
+            <span class="terminal-command">3. Logs all trades to a file</span>
+          </div>
+        </div>
+      </div>
+
+      <p>The agent will:</p>
+      <ol>
+        <li>Check your current positions with <code>get_positions</code></li>
+        <li>Get current prices for each position</li>
+        <li>Create a script that monitors and auto-sells</li>
+        <li>Include proper error handling and logging</li>
+      </ol>
+
+      <h2>Bot Architecture Patterns</h2>
+
+      <h3>Pattern 1: Simple Polling</h3>
+
+      <pre><code>// Poll every N seconds
+setInterval(async () => {
+  const positions = await getPositions();
+  for (const pos of positions) {
+    if (shouldSell(pos)) {
+      await placeOrder({ side: 'SELL', ... });
+    }
+  }
+}, 30000);</code></pre>
+
+      <h3>Pattern 2: Event-Driven</h3>
+
+      <pre><code>// React to price changes
+const priceCache = new Map();
+
+async function onPriceUpdate(tokenId, newPrice) {
+  const oldPrice = priceCache.get(tokenId);
+  priceCache.set(tokenId, newPrice);
+  
+  if (oldPrice && significantChange(oldPrice, newPrice)) {
+    await evaluateTrade(tokenId, newPrice);
+  }
+}</code></pre>
+
+      <h3>Pattern 3: State Machine</h3>
+
+      <pre><code>const states = {
+  IDLE: 'idle',
+  WATCHING: 'watching',
+  ENTERING: 'entering',
+  IN_POSITION: 'in_position',
+  EXITING: 'exiting'
+};
+
+let currentState = states.IDLE;
+
+async function transition(event) {
+  switch (currentState) {
+    case states.IDLE:
+      if (event.type === 'OPPORTUNITY') {
+        currentState = states.ENTERING;
+        await placeEntry(event.market);
+      }
+      break;
+    // ... more state transitions
+  }
+}</code></pre>
+
+      <h2>Using the MCP API Directly</h2>
+
+      <p>Your bots can call the Quantish MCP API directly:</p>
+
+      <pre><code>const MCP_URL = process.env.QUANTISH_MCP_URL;
+const API_KEY = process.env.QUANTISH_API_KEY;
+
+async function callTool(name, args) {
+  const response = await fetch(`${MCP_URL}/execute`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': API_KEY
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'tools/call',
+      params: { name, arguments: args },
+      id: Date.now()
+    })
+  });
+  
+  const data = await response.json();
+  if (data.error) throw new Error(data.error.message);
+  
+  // Parse MCP response format
+  const content = data.result?.content?.[0];
+  if (content?.type === 'text') {
+    return JSON.parse(content.text);
+  }
+  return data.result;
+}
+
+// Example usage
+const balances = await callTool('get_balances', {});
+const positions = await callTool('get_positions', {});
+await callTool('place_order', {
+  conditionId: '0x...',
+  tokenId: '123...',
+  side: 'BUY',
+  price: 0.55,
+  size: 100
+});</code></pre>
+
+      <h2>Best Practices</h2>
+
+      <div class="feature-grid">
+        <div class="feature-card">
+          <h4>💾 Log Everything</h4>
+          <p>Log all trades, prices, and decisions. You'll need this for debugging and analysis.</p>
+        </div>
+        <div class="feature-card">
+          <h4>🔒 Error Handling</h4>
+          <p>Wrap all API calls in try/catch. Network errors happen - your bot should survive them.</p>
+        </div>
+        <div class="feature-card">
+          <h4>⏱️ Rate Limiting</h4>
+          <p>Don't poll too frequently. 30-60 second intervals are usually sufficient.</p>
+        </div>
+        <div class="feature-card">
+          <h4>🧪 Paper Trading</h4>
+          <p>Test your logic without real money first. Log what trades "would" happen.</p>
+        </div>
+      </div>
+
+      <h2>Example: Full Trading Bot</h2>
+
+      <p>Ask the agent to create a complete, production-ready bot:</p>
+
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line">
+            <span class="terminal-prompt">You:</span>
+            <span class="terminal-command"> Create a complete trading bot project with:</span>
+          </div>
+          <div class="terminal-line terminal-command">- TypeScript</div>
+          <div class="terminal-line terminal-command">- Environment variable configuration</div>
+          <div class="terminal-line terminal-command">- Logging to file and console</div>
+          <div class="terminal-line terminal-command">- Position monitoring every 30s</div>
+          <div class="terminal-line terminal-command">- Take profit at 25%, stop loss at 10%</div>
+          <div class="terminal-line terminal-command">- Telegram notifications</div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-output">I'll create a complete trading bot project for you...</div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-output">✓ write_file(path: "trading-bot/package.json")</div>
+          <div class="terminal-line terminal-output">✓ write_file(path: "trading-bot/src/index.ts")</div>
+          <div class="terminal-line terminal-output">✓ write_file(path: "trading-bot/src/mcp.ts")</div>
+          <div class="terminal-line terminal-output">✓ write_file(path: "trading-bot/src/telegram.ts")</div>
+          <div class="terminal-line terminal-output">✓ write_file(path: "trading-bot/.env.example")</div>
+          <div class="terminal-line terminal-output">✓ write_file(path: "trading-bot/README.md")</div>
+          <div class="terminal-line terminal-success">Created trading-bot/ with 6 files!</div>
+        </div>
+      </div>
+
+      <div class="footer">
+        <p>Built by <a href="https://quantish.live">Quantish</a> • <a href="https://github.com/joinQuantish/quantish-agent">GitHub</a> • MIT License</p>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
+

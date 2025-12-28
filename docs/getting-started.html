@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Getting Started - Quantish Agent</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+  
+  <div class="layout">
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">QUANTISH</div>
+        <div class="logo-subtitle">AI Trading Agent</div>
+      </div>
+      
+      <ul class="nav-tree">
+        <li><a href="index.html"><span class="nav-prefix">○</span> Overview</a></li>
+        <li><a href="getting-started.html" class="active"><span class="nav-prefix">❯</span> Getting Started</a></li>
+        <li><a href="commands.html"><span class="nav-prefix">├</span> Commands</a></li>
+        <li><a href="tools.html"><span class="nav-prefix">├</span> Tools</a></li>
+        <li><a href="building-bots.html"><span class="nav-prefix">└</span> Building Bots</a></li>
+      </ul>
+      
+      <div class="nav-section">Resources</div>
+      <ul class="nav-tree">
+        <li><a href="https://github.com/joinQuantish/quantish-agent" target="_blank"><span class="nav-prefix">○</span> GitHub</a></li>
+        <li><a href="https://www.npmjs.com/package/@quantish/agent" target="_blank"><span class="nav-prefix">○</span> NPM</a></li>
+        <li><a href="https://quantish.live" target="_blank"><span class="nav-prefix">○</span> quantish.live</a></li>
+      </ul>
+    </nav>
+
+    <main class="main">
+      <h1>Getting Started</h1>
+      
+      <p>Get up and running with Quantish Agent in 5 minutes.</p>
+
+      <h2>Prerequisites</h2>
+      
+      <ul>
+        <li><strong>Node.js 18+</strong> - <a href="https://nodejs.org">Download here</a></li>
+        <li><strong>Anthropic API Key</strong> - <a href="https://console.anthropic.com/">Get one here</a></li>
+      </ul>
+
+      <h2>Step 1: Install</h2>
+
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line">
+            <span class="terminal-prompt">$</span>
+            <span class="terminal-command"> npm install -g @quantish/agent</span>
+          </div>
+        </div>
+      </div>
+
+      <p>Or run directly with npx:</p>
+
+      <pre><code>npx @quantish/agent</code></pre>
+
+      <h2>Step 2: Initialize</h2>
+
+      <p>Run the setup wizard to configure your API keys:</p>
+
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line">
+            <span class="terminal-prompt">$</span>
+            <span class="terminal-command"> quantish init</span>
+          </div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-output">🔐 Setting up Quantish Agent</div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-output">Enter your Anthropic API key:</div>
+          <div class="terminal-line">
+            <span class="terminal-prompt">></span>
+            <span class="terminal-command"> sk-ant-api03-...</span>
+          </div>
+          <div class="terminal-line terminal-success">✓ Anthropic API key configured</div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-output">Creating your Quantish wallet...</div>
+          <div class="terminal-line terminal-success">✓ Wallet created!</div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-success">Setup complete! Run 'quantish' to start.</div>
+        </div>
+      </div>
+
+      <h3>What happens during init?</h3>
+
+      <ol>
+        <li><strong>Anthropic API Key</strong> - Stored locally for Claude AI access</li>
+        <li><strong>Wallet Creation</strong> - A Polymarket wallet is created via the Quantish Signing Server</li>
+        <li><strong>API Key</strong> - Your personal Quantish API key is generated</li>
+      </ol>
+
+      <div class="callout info">
+        <div class="callout-title">About the Signing Server</div>
+        <p>Polymarket uses a gasless relayer system. The Quantish Signing Server handles the complex signature formats and relays transactions. Your funds remain non-custodial - you can export your private key anytime.</p>
+      </div>
+
+      <h2>Step 3: Start Trading</h2>
+
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line">
+            <span class="terminal-prompt">$</span>
+            <span class="terminal-command"> quantish</span>
+          </div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line" style="color: var(--yellow);">
+ ██████╗ ██╗   ██╗ █████╗ ███╗   ██╗████████╗██╗███████╗██╗  ██╗
+          </div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-output">Hey there! I'm Quantish, your AI trading agent.</div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line">
+            <span class="terminal-prompt">You:</span>
+            <span class="terminal-command"> what's my balance?</span>
+          </div>
+          <div class="terminal-line terminal-output">✓ get_balances()</div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-output">Your wallet balances:</div>
+          <div class="terminal-line terminal-output">• USDC: $0.00</div>
+          <div class="terminal-line terminal-output">• MATIC: 0.00</div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-output">To start trading, deposit USDC to your wallet.</div>
+        </div>
+      </div>
+
+      <h2>Step 4: Fund Your Wallet</h2>
+
+      <p>To trade on Polymarket, you need USDC in your wallet. Ask the agent for your deposit address:</p>
+
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line">
+            <span class="terminal-prompt">You:</span>
+            <span class="terminal-command"> get my deposit address</span>
+          </div>
+          <div class="terminal-line terminal-output">✓ get_deposit_addresses()</div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-output">Deposit addresses for your wallet:</div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-output"><strong>Polygon (USDC recommended):</strong></div>
+          <div class="terminal-line terminal-output">0x1234...abcd</div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-output">Deposits are automatically converted to USDC.e for trading.</div>
+        </div>
+      </div>
+
+      <h2>Environment Variables</h2>
+
+      <p>You can also set keys via environment variables:</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Variable</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>ANTHROPIC_API_KEY</code></td>
+            <td>Your Anthropic API key (required)</td>
+          </tr>
+          <tr>
+            <td><code>QUANTISH_API_KEY</code></td>
+            <td>Your Quantish trading API key</td>
+          </tr>
+          <tr>
+            <td><code>EXA_API_KEY</code></td>
+            <td>Optional: Exa AI for better web search</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <pre><code>export ANTHROPIC_API_KEY="sk-ant-..."
+export QUANTISH_API_KEY="pk_live_..."
+quantish</code></pre>
+
+      <h2>Configuration File</h2>
+
+      <p>Config is stored in <code>~/.quantish/config.json</code>:</p>
+
+      <pre><code>{
+  "anthropicApiKey": "sk-ant-...",
+  "quantishApiKey": "pk_live_...",
+  "mcpServerUrl": "https://quantish-sdk-production.up.railway.app/mcp"
+}</code></pre>
+
+      <h2>Next Steps</h2>
+
+      <ul>
+        <li><a href="commands.html">Learn the slash commands</a></li>
+        <li><a href="tools.html">Explore available tools</a></li>
+        <li><a href="building-bots.html">Build your first trading bot</a></li>
+      </ul>
+
+      <div class="footer">
+        <p>Built by <a href="https://quantish.live">Quantish</a> • <a href="https://github.com/joinQuantish/quantish-agent">GitHub</a> • MIT License</p>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
+

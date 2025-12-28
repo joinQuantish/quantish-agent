@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tools - Quantish Agent</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+  
+  <div class="layout">
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">QUANTISH</div>
+        <div class="logo-subtitle">AI Trading Agent</div>
+      </div>
+      
+      <ul class="nav-tree">
+        <li><a href="index.html"><span class="nav-prefix">○</span> Overview</a></li>
+        <li><a href="getting-started.html"><span class="nav-prefix">├</span> Getting Started</a></li>
+        <li><a href="commands.html"><span class="nav-prefix">├</span> Commands</a></li>
+        <li><a href="tools.html" class="active"><span class="nav-prefix">❯</span> Tools</a></li>
+        <li><a href="building-bots.html"><span class="nav-prefix">└</span> Building Bots</a></li>
+      </ul>
+      
+      <div class="nav-section">Resources</div>
+      <ul class="nav-tree">
+        <li><a href="https://github.com/joinQuantish/quantish-agent" target="_blank"><span class="nav-prefix">○</span> GitHub</a></li>
+        <li><a href="https://www.npmjs.com/package/@quantish/agent" target="_blank"><span class="nav-prefix">○</span> NPM</a></li>
+        <li><a href="https://quantish.live" target="_blank"><span class="nav-prefix">○</span> quantish.live</a></li>
+      </ul>
+    </nav>
+
+    <main class="main">
+      <h1>Available Tools</h1>
+      
+      <p>Quantish Agent has access to two categories of tools: <strong>Local Tools</strong> that run on your machine, and <strong>MCP Trading Tools</strong> that execute on Polymarket.</p>
+
+      <h2>Local Tools</h2>
+
+      <p>These tools run directly on your computer and are always available.</p>
+
+      <h3>File System</h3>
+
+      <div class="tool-card">
+        <span class="tool-name">read_file</span>
+        <span class="tool-category">filesystem</span>
+        <div class="tool-desc">Read the contents of a file. Supports text files of any size.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">write_file</span>
+        <span class="tool-category">filesystem</span>
+        <div class="tool-desc">Write content to a file. Creates the file if it doesn't exist, overwrites if it does.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">list_dir</span>
+        <span class="tool-category">filesystem</span>
+        <div class="tool-desc">List contents of a directory with file sizes and types.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">delete_file</span>
+        <span class="tool-category">filesystem</span>
+        <div class="tool-desc">Delete a file from the filesystem.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">file_exists</span>
+        <span class="tool-category">filesystem</span>
+        <div class="tool-desc">Check if a file or directory exists at the given path.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">grep</span>
+        <span class="tool-category">filesystem</span>
+        <div class="tool-desc">Search for a pattern in file contents. Supports regex.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">find_files</span>
+        <span class="tool-category">filesystem</span>
+        <div class="tool-desc">Find files matching a pattern (glob) in a directory.</div>
+      </div>
+
+      <h3>Shell</h3>
+
+      <div class="tool-card">
+        <span class="tool-name">run_command</span>
+        <span class="tool-category">shell</span>
+        <div class="tool-desc">Execute a shell command and return the output. Supports timeouts and error handling.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">start_background_process</span>
+        <span class="tool-category">shell</span>
+        <div class="tool-desc">Start a long-running process in the background (e.g., servers). Returns a process ID for management.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">stop_process</span>
+        <span class="tool-category">shell</span>
+        <div class="tool-desc">Stop a background process by its ID.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">list_processes</span>
+        <span class="tool-category">shell</span>
+        <div class="tool-desc">List all running background processes with their status.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">get_process_output</span>
+        <span class="tool-category">shell</span>
+        <div class="tool-desc">Get the stdout/stderr output from a background process.</div>
+      </div>
+
+      <h3>Git</h3>
+
+      <div class="tool-card">
+        <span class="tool-name">git_status</span>
+        <span class="tool-category">git</span>
+        <div class="tool-desc">Get the current git status (staged, unstaged, untracked files).</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">git_diff</span>
+        <span class="tool-category">git</span>
+        <div class="tool-desc">Show git diff for changes. Can specify files or show all.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">git_add</span>
+        <span class="tool-category">git</span>
+        <div class="tool-desc">Stage files for commit. Supports patterns and "." for all.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">git_commit</span>
+        <span class="tool-category">git</span>
+        <div class="tool-desc">Create a commit with the specified message.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">git_log</span>
+        <span class="tool-category">git</span>
+        <div class="tool-desc">Show commit history with configurable limit.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">git_checkout</span>
+        <span class="tool-category">git</span>
+        <div class="tool-desc">Switch branches or restore files.</div>
+      </div>
+
+      <h3>Web</h3>
+
+      <div class="tool-card">
+        <span class="tool-name">web_search</span>
+        <span class="tool-category">web</span>
+        <div class="tool-desc">Search the web for information. Uses Exa AI if <code>EXA_API_KEY</code> is set, otherwise falls back to DuckDuckGo.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">web_answer</span>
+        <span class="tool-category">web</span>
+        <div class="tool-desc">Get an AI-generated answer with citations. Requires <code>EXA_API_KEY</code>.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">fetch_url</span>
+        <span class="tool-category">web</span>
+        <div class="tool-desc">Fetch and extract text content from a URL.</div>
+      </div>
+
+      <h2>MCP Trading Tools</h2>
+
+      <p>These tools connect to the Quantish MCP servers for market data and trading.</p>
+
+      <h3>Discovery Tools (Free)</h3>
+
+      <p>Available without any setup - uses embedded public API key.</p>
+
+      <div class="tool-card">
+        <span class="tool-name">search_markets</span>
+        <span class="tool-category">discovery</span>
+        <div class="tool-desc">Search for prediction markets by keyword across Polymarket, Kalshi, and Limitless.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">get_market_details</span>
+        <span class="tool-category">discovery</span>
+        <div class="tool-desc">Get detailed information about a specific market including current prices and outcomes.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">get_trending_markets</span>
+        <span class="tool-category">discovery</span>
+        <div class="tool-desc">Get currently trending markets by volume and activity.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">get_categories</span>
+        <span class="tool-category">discovery</span>
+        <div class="tool-desc">List available market categories (Politics, Sports, Crypto, etc.).</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">find_arbitrage</span>
+        <span class="tool-category">discovery</span>
+        <div class="tool-desc">Scan for arbitrage opportunities across markets.</div>
+      </div>
+
+      <h3>Trading Tools (Requires Wallet)</h3>
+
+      <p>Requires <code>quantish init</code> to set up your wallet.</p>
+
+      <div class="tool-card">
+        <span class="tool-name">get_balances</span>
+        <span class="tool-category">trading</span>
+        <div class="tool-desc">Get your wallet balances (USDC, MATIC) for both EOA and Safe wallets.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">get_positions</span>
+        <span class="tool-category">trading</span>
+        <div class="tool-desc">Get all your current positions (shares held in markets).</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">place_order</span>
+        <span class="tool-category">trading</span>
+        <div class="tool-desc">Place a buy or sell order on a market. Requires conditionId, tokenId, side, price, and size.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">cancel_order</span>
+        <span class="tool-category">trading</span>
+        <div class="tool-desc">Cancel an open order by its ID.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">get_orders</span>
+        <span class="tool-category">trading</span>
+        <div class="tool-desc">List your orders with optional status filter (LIVE, FILLED, CANCELLED).</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">get_orderbook</span>
+        <span class="tool-category">trading</span>
+        <div class="tool-desc">Get the order book for a token showing bids and asks.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">get_price</span>
+        <span class="tool-category">trading</span>
+        <div class="tool-desc">Get the current midpoint price for a token.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">transfer_usdc</span>
+        <span class="tool-category">trading</span>
+        <div class="tool-desc">Transfer USDC from your Safe wallet to another address. Gasless.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">swap_tokens</span>
+        <span class="tool-category">trading</span>
+        <div class="tool-desc">Swap between MATIC, USDC, and Native USDC using LI.FI DEX aggregator.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">claim_winnings</span>
+        <span class="tool-category">trading</span>
+        <div class="tool-desc">Claim winnings from resolved markets.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">get_deposit_addresses</span>
+        <span class="tool-category">trading</span>
+        <div class="tool-desc">Get deposit addresses for funding your wallet (EVM, Solana, Bitcoin).</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">export_private_key</span>
+        <span class="tool-category">trading</span>
+        <div class="tool-desc">Export your wallet's private key for backup or migration.</div>
+      </div>
+
+      <h2>Example: Using Tools</h2>
+
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line">
+            <span class="terminal-prompt">You:</span>
+            <span class="terminal-command"> search for bitcoin markets and show me the most liquid one</span>
+          </div>
+          <div class="terminal-line terminal-output">✓ search_markets(query: "bitcoin", limit: 10)</div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-output">Found 10 bitcoin-related markets. The most liquid:</div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-output"><strong>Bitcoin above $100k by end of 2024?</strong></div>
+          <div class="terminal-line terminal-output">• Liquidity: $2.3M</div>
+          <div class="terminal-line terminal-output">• YES: 67% ($0.67)</div>
+          <div class="terminal-line terminal-output">• NO: 33% ($0.33)</div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line">
+            <span class="terminal-prompt">You:</span>
+            <span class="terminal-command"> buy $20 of YES at current price</span>
+          </div>
+          <div class="terminal-line terminal-output">✓ place_order(side: "BUY", price: 0.67, size: 29)</div>
+          <div class="terminal-line terminal-success">Order placed! 29 YES shares at $0.67</div>
+        </div>
+      </div>
+
+      <div class="footer">
+        <p>Built by <a href="https://quantish.live">Quantish</a> • <a href="https://github.com/joinQuantish/quantish-agent">GitHub</a> • MIT License</p>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
+
