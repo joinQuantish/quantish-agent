@@ -1,0 +1,59 @@
+# Dependencies
+node_modules/
+
+# Build output (uncomment if you want to include dist in git)
+# dist/
+
+# Environment files - CRITICAL: Never commit these
+.env
+.env.*
+.env.local
+.env.development
+.env.production
+*.env
+config.env
+
+# IDE and editor files
+.cursor/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Test artifacts
+coverage/
+.nyc_output/
+
+# Package manager files
+*.tgz
+package-lock.json
+
+# Build cache
+.cache/
+.parcel-cache/
+.turbo/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+

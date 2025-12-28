@@ -1,0 +1,27 @@
+# Source files (only dist is needed)
+src/
+tsconfig.json
+*.ts
+!dist/**
+
+# Development files
+node_modules/
+.env*
+.cursor/
+
+# Planning docs
+PUBLISH_PLAN.md
+
+# Test files
+test/
+*.test.ts
+*.spec.ts
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+

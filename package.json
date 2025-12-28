@@ -1,0 +1,68 @@
+{
+  "name": "@quantish/agent",
+  "version": "0.1.0",
+  "description": "AI-powered agent for building trading bots on Polymarket",
+  "type": "module",
+  "bin": {
+    "quantish": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "dev": "tsup src/index.ts --format esm --watch",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "polymarket",
+    "trading",
+    "cli",
+    "ai",
+    "claude",
+    "agent",
+    "mcp",
+    "prediction-markets",
+    "polymarket-trading",
+    "ai-agent",
+    "trading-bot"
+  ],
+  "author": "Quantish <hello@quantish.live>",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joinQuantish/quantish-agent.git"
+  },
+  "bugs": {
+    "url": "https://github.com/joinQuantish/quantish-agent/issues"
+  },
+  "homepage": "https://quantish.live",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.0",
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0",
+    "conf": "^13.0.1",
+    "ink": "^5.0.1",
+    "ink-text-input": "^6.0.0",
+    "ink-spinner": "^5.0.0",
+    "ora": "^8.1.1",
+    "react": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.18",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2"
+  }
+}
+
