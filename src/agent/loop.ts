@@ -416,7 +416,28 @@ const data = await response.json();
 const result = JSON.parse(data.result.content[0].text);
 \`\`\`
 
+### ⚠️ CRITICAL: Tool-to-Server Mapping (MEMORIZE THIS)
+
+| Tool Name | Server | Auth Required | Helper Function |
+|-----------|--------|---------------|-----------------|
+| \`get_balances\` | TRADING | Yes (QUANTISH_API_KEY) | callTradingTool() |
+| \`get_positions\` | TRADING | Yes | callTradingTool() |
+| \`place_order\` | TRADING | Yes | callTradingTool() |
+| \`cancel_order\` | TRADING | Yes | callTradingTool() |
+| \`get_orders\` | TRADING | Yes | callTradingTool() |
+| \`get_orderbook\` | TRADING | Yes | callTradingTool() |
+| \`get_price\` | TRADING | Yes | callTradingTool() |
+| \`get_deposit_addresses\` | TRADING | Yes | callTradingTool() |
+| \`transfer_usdc\` | TRADING | Yes | callTradingTool() |
+| \`search_markets\` | DISCOVERY | No (public key) | callDiscoveryTool() |
+| \`get_market_details\` | DISCOVERY | No | callDiscoveryTool() |
+| \`get_trending_markets\` | DISCOVERY | No | callDiscoveryTool() |
+| \`find_arbitrage\` | DISCOVERY | No | callDiscoveryTool() |
+
 ### Key Trading Tools (require QUANTISH_API_KEY)
+URL: https://quantish-sdk-production.up.railway.app/mcp/execute
+Format: JSON-RPC 2.0 ({ jsonrpc, method, params, id })
+
 - \`get_balances\`: Returns { usdc, nativeUsdc, matic } for EOA and Safe wallets
 - \`get_positions\`: Returns array of current share holdings with market info
 - \`place_order\`: Place order. Args: { conditionId, tokenId, side: "BUY"|"SELL", price: 0.01-0.99, size: number }
@@ -428,6 +449,8 @@ const result = JSON.parse(data.result.content[0].text);
 - \`transfer_usdc\`: Send USDC. Args: { toAddress, amount }
 
 ### Key Discovery Tools (free, no auth required)
+URL: https://quantish.live/mcp/execute
+Format: Simple ({ name, arguments }) - NOT JSON-RPC!
 Discovery uses a SIMPLER request format (not full JSON-RPC):
 \`\`\`javascript
 // Discovery API - uses simple { name, arguments } format
@@ -526,13 +549,23 @@ When generating ANY code that uses Quantish/MCP (bots, apps, scripts, APIs, etc.
 
 ### MANDATORY Requirements
 
-1. **ALWAYS include the callTool() helper function** - Copy it EXACTLY from the template above
-2. **ALWAYS use callTool() for ALL MCP operations** - Never use direct API calls to Polymarket
-3. **NEVER hardcode prices, market data, or API responses** - Always fetch live data via callTool()
+1. **ALWAYS include BOTH callTradingTool() AND callDiscoveryTool() helper functions** - Copy them EXACTLY from the template
+2. **USE THE CORRECT HELPER FOR EACH TOOL** - Check the tool-to-server mapping table above!
+   - Trading tools (get_price, get_orderbook, place_order, etc.) → callTradingTool()
+   - Discovery tools (search_markets, get_market_details, etc.) → callDiscoveryTool()
+3. **NEVER hardcode prices, market data, or API responses** - Always fetch live data
 4. **NEVER comment out MCP calls** - All API calls must be real, working, executable code
 5. **ALWAYS create .env.example** - Document all required environment variables
-6. **ALWAYS validate QUANTISH_API_KEY exists** - Fail fast with clear error if missing
+6. **ALWAYS validate QUANTISH_API_KEY exists** when using Trading tools - Fail fast with clear error if missing
 7. **ALWAYS use dotenv** - \`require('dotenv').config()\` at the top of every file
+
+### ⛔ NEVER DO WORKAROUNDS
+
+- **NEVER try to "work around" missing tools** - If a tool requires auth, use auth
+- **NEVER substitute one tool for another** - get_market_details is NOT a replacement for get_price
+- **NEVER use the Discovery API for tools that require Trading API** - They are separate servers
+- **NEVER mock or simulate API responses** - Always make real API calls
+- **If a feature requires QUANTISH_API_KEY, tell the user they need one** - Don't try to avoid it
 
 ### File Structure for ANY Application
 
