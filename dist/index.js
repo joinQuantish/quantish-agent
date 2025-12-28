@@ -2917,6 +2917,7 @@ ${userMessage}`;
       const toolResults = [];
       for (const toolUse of toolUses) {
         this.config.onToolCall?.(toolUse.name, toolUse.input);
+        await new Promise((resolve2) => setImmediate(resolve2));
         const { result, source } = await this.executeTool(
           toolUse.name,
           toolUse.input

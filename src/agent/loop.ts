@@ -777,6 +777,10 @@ export class Agent {
       for (const toolUse of toolUses) {
         this.config.onToolCall?.(toolUse.name, toolUse.input as Record<string, unknown>);
 
+        // Allow UI to render the "pending" state before executing
+        // This ensures the spinner is visible during tool execution
+        await new Promise(resolve => setImmediate(resolve));
+
         const { result, source } = await this.executeTool(
           toolUse.name,
           toolUse.input as Record<string, unknown>
