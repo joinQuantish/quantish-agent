@@ -913,8 +913,111 @@ var filesystemTools = [
       },
       required: ["path", "old_string", "new_string"]
     }
+  },
+  {
+    name: "setup_env",
+    description: "Setup or update environment variables in a .env file for an application. Creates .env if it doesn't exist. Optionally creates a .env.example template. Use this when building any application that needs API keys or configuration.",
+    input_schema: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description: 'Path to the .env file (default: ".env" in current directory)'
+        },
+        variables: {
+          type: "object",
+          description: 'Object with environment variable names as keys and values. Example: { "QUANTISH_API_KEY": "abc123", "TOKEN_ID": "xyz" }',
+          additionalProperties: { type: "string" }
+        },
+        overwrite: {
+          type: "boolean",
+          description: "If true, overwrite existing variables. Default false (skip existing)."
+        },
+        create_example: {
+          type: "boolean",
+          description: "If true, also create a .env.example template file with placeholder values."
+        }
+      },
+      required: ["variables"]
+    }
   }
 ];
+async function setupEnv(envPath = ".env", variables, options) {
+  try {
+    const resolvedPath = path.resolve(envPath);
+    let content = "";
+    const existingVars = {};
+    if (existsSync(resolvedPath)) {
+      content = await fs.readFile(resolvedPath, "utf-8");
+      for (const line of content.split("\n")) {
+        const trimmed = line.trim();
+        if (trimmed && !trimmed.startsWith("#")) {
+          const eqIndex = trimmed.indexOf("=");
+          if (eqIndex > 0) {
+            const key = trimmed.slice(0, eqIndex);
+            const value = trimmed.slice(eqIndex + 1);
+            existingVars[key] = value;
+          }
+        }
+      }
+    }
+    const updatedVars = [];
+    const addedVars = [];
+    const skippedVars = [];
+    for (const [key, value] of Object.entries(variables)) {
+      if (existingVars[key] !== void 0) {
+        if (options?.overwrite) {
+          const regex = new RegExp(`^${key}=.*$`, "m");
+          content = content.replace(regex, `${key}=${value}`);
+          updatedVars.push(key);
+        } else {
+          skippedVars.push(key);
+        }
+      } else {
+        if (content && !content.endsWith("\n")) {
+          content += "\n";
+        }
+        content += `${key}=${value}
+`;
+        addedVars.push(key);
+      }
+    }
+    await fs.writeFile(resolvedPath, content, "utf-8");
+    if (options?.createExample) {
+      const examplePath = resolvedPath.replace(/\.env$/, ".env.example");
+      let exampleContent = "# Environment variables for this application\n";
+      exampleContent += "# Copy this file to .env and fill in your values\n\n";
+      for (const key of Object.keys({ ...existingVars, ...variables })) {
+        if (key === "QUANTISH_API_KEY") {
+          exampleContent += `# Get your API key at https://quantish.live
+`;
+          exampleContent += `${key}=your_api_key_here
+
+`;
+        } else {
+          exampleContent += `${key}=
+`;
+        }
+      }
+      await fs.writeFile(examplePath, exampleContent, "utf-8");
+    }
+    return {
+      success: true,
+      data: {
+        path: resolvedPath,
+        added: addedVars,
+        updated: updatedVars,
+        skipped: skippedVars,
+        exampleCreated: options?.createExample || false
+      }
+    };
+  } catch (error2) {
+    return {
+      success: false,
+      error: `Failed to setup env: ${error2 instanceof Error ? error2.message : String(error2)}`
+    };
+  }
+}
 async function executeFilesystemTool(name, args) {
   switch (name) {
     case "read_file":
@@ -936,6 +1039,15 @@ async function executeFilesystemTool(name, args) {
         args.old_string,
         args.new_string,
         { replaceAll: args.replace_all }
+      );
+    case "setup_env":
+      return setupEnv(
+        args.path || ".env",
+        args.variables,
+        {
+          overwrite: args.overwrite,
+          createExample: args.create_example
+        }
       );
     default:
       return { success: false, error: `Unknown filesystem tool: ${name}` };
@@ -2566,11 +2678,11 @@ You can work with the local filesystem:
 - When writing code, follow existing patterns and conventions
 - For dangerous operations (rm, sudo), explain what you're doing
 
-You help users build trading bots and agents by combining coding skills with trading capabilities.
+You help users build ANY application that interacts with prediction markets - trading bots, web apps, mobile backends, dashboards, notification systems, analytics tools, Discord bots, Telegram bots, and more.
 
-## Building Standalone Trading Bots
+## Building Applications with Quantish MCP
 
-When users ask you to create trading bots or agents that run independently (not through this CLI), here's how to integrate with the Quantish MCP API:
+When users ask you to create ANY application that uses prediction market data or trading (bots, APIs, web apps, scripts, etc.), you MUST use the Quantish MCP API. This is the ONLY way to access market data and trading functionality in standalone applications.
 
 ### MCP API Endpoint
 \`\`\`
@@ -2702,14 +2814,221 @@ async function monitorPrice(tokenId, threshold) {
 setInterval(() => monitorPrice(process.env.TOKEN_ID, 0.5), 60000);
 \`\`\`
 
-### Bot Best Practices
+### Best Practices
 1. **Environment Variables**: Always use process.env for API keys
 2. **Error Handling**: Wrap all API calls in try/catch
 3. **Rate Limiting**: Poll at 30-60 second intervals minimum
 4. **Logging**: Log all trades with timestamps for debugging
 5. **Testing**: Test with small amounts first
 6. **Graceful Shutdown**: Handle SIGINT to clean up
-7. **.env.example**: Always create a template for required env vars`;
+7. **.env.example**: Always create a template for required env vars
+
+## CRITICAL: Code Generation Rules (MUST FOLLOW)
+
+When generating ANY code that uses Quantish/MCP (bots, apps, scripts, APIs, etc.):
+
+### MANDATORY Requirements
+
+1. **ALWAYS include the callTool() helper function** - Copy it EXACTLY from the template above
+2. **ALWAYS use callTool() for ALL MCP operations** - Never use direct API calls to Polymarket
+3. **NEVER hardcode prices, market data, or API responses** - Always fetch live data via callTool()
+4. **NEVER comment out MCP calls** - All API calls must be real, working, executable code
+5. **ALWAYS create .env.example** - Document all required environment variables
+6. **ALWAYS validate QUANTISH_API_KEY exists** - Fail fast with clear error if missing
+7. **ALWAYS use dotenv** - \`require('dotenv').config()\` at the top of every file
+
+### File Structure for ANY Application
+
+When creating an application, ALWAYS create these files:
+1. Main application file (e.g., \`app.js\`, \`bot.js\`, \`server.js\`)
+2. \`.env.example\` with all required variables documented
+3. \`package.json\` with dependencies (dotenv, etc.)
+4. \`README.md\` with setup instructions
+
+### Example .env.example (ALWAYS CREATE THIS)
+\`\`\`
+# Quantish MCP API Key (required for trading)
+# Get yours at: https://quantish.live
+QUANTISH_API_KEY=your_api_key_here
+
+# Market Configuration (customize for your use case)
+TOKEN_ID=your_token_id_here
+CONDITION_ID=your_condition_id_here
+\`\`\`
+
+### WRONG vs CORRECT Code Examples
+
+WRONG - Hardcoded data (NEVER DO THIS):
+\`\`\`javascript
+const prices = { YES: 0.55, NO: 0.45 }; // WRONG: hardcoded
+const mockResult = { mid: "0.50" }; // WRONG: mock data
+// await callTool('place_order', {...}); // WRONG: commented out
+\`\`\`
+
+CORRECT - Live MCP calls (ALWAYS DO THIS):
+\`\`\`javascript
+const priceResult = await callTool('get_price', { tokenId });
+const price = parseFloat(priceResult.mid);
+const orderResult = await callTool('place_order', { 
+  conditionId, tokenId, side: 'BUY', price, size 
+});
+console.log('Order placed:', orderResult.orderId);
+\`\`\`
+
+### Complete Production-Ready Template
+
+Use this as the starting point for ANY application:
+
+\`\`\`javascript
+#!/usr/bin/env node
+/**
+ * Quantish Application Template
+ * Replace this with your application description
+ */
+
+require('dotenv').config();
+
+// ============================================
+// MCP Configuration - DO NOT MODIFY
+// ============================================
+const TRADING_MCP_URL = 'https://quantish-sdk-production.up.railway.app/mcp/execute';
+const DISCOVERY_MCP_URL = 'https://quantish.live/mcp/execute';
+const DISCOVERY_API_KEY = 'qm_ueQeqrmvZyHtR1zuVbLYkhx0fKyVAuV8'; // Public key for discovery
+
+// Validate required environment variables
+if (!process.env.QUANTISH_API_KEY) {
+  console.error('ERROR: QUANTISH_API_KEY environment variable is required');
+  console.error('Get your API key at: https://quantish.live');
+  console.error('Then create a .env file with: QUANTISH_API_KEY=your_key_here');
+  process.exit(1);
+}
+
+// ============================================
+// MCP Helper Functions - COPY THESE EXACTLY
+// ============================================
+
+/**
+ * Call a trading tool (requires QUANTISH_API_KEY)
+ * Tools: get_balances, get_positions, place_order, cancel_order, get_orders, 
+ *        get_orderbook, get_price, get_deposit_addresses, transfer_usdc
+ */
+async function callTradingTool(name, args = {}) {
+  const response = await fetch(TRADING_MCP_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': process.env.QUANTISH_API_KEY
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'tools/call',
+      params: { name, arguments: args },
+      id: Date.now()
+    })
+  });
+  
+  const data = await response.json();
+  if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+  
+  try {
+    return JSON.parse(data.result.content[0].text);
+  } catch {
+    return data.result.content[0].text;
+  }
+}
+
+/**
+ * Call a discovery tool (no auth required)
+ * Tools: search_markets, get_market_details, get_trending_markets, find_arbitrage
+ */
+async function callDiscoveryTool(name, args = {}) {
+  const response = await fetch(DISCOVERY_MCP_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-API-Key': DISCOVERY_API_KEY
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'tools/call',
+      params: { name, arguments: args },
+      id: Date.now()
+    })
+  });
+  
+  const data = await response.json();
+  if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+  
+  try {
+    return JSON.parse(data.result.content[0].text);
+  } catch {
+    return data.result.content[0].text;
+  }
+}
+
+// Shorthand for common operations
+const callTool = callTradingTool; // Default to trading tools
+
+// ============================================
+// Your Application Code Goes Here
+// ============================================
+
+async function main() {
+  console.log('Starting application...');
+  
+  try {
+    // Example: Get wallet balances
+    const balances = await callTool('get_balances');
+    console.log('Wallet balances:', balances);
+    
+    // Example: Search for markets
+    const markets = await callDiscoveryTool('search_markets', { 
+      query: 'Bitcoin', 
+      limit: 5 
+    });
+    console.log('Found markets:', markets.found);
+    
+    // Example: Get price for a token
+    if (process.env.TOKEN_ID) {
+      const price = await callTool('get_price', { 
+        tokenId: process.env.TOKEN_ID 
+      });
+      console.log('Current price:', price.mid);
+    }
+    
+  } catch (error) {
+    console.error('Error:', error.message);
+  }
+}
+
+// Graceful shutdown
+process.on('SIGINT', () => {
+  console.log('\\nShutting down...');
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  console.log('\\nShutting down...');
+  process.exit(0);
+});
+
+// Run the application
+main().catch(console.error);
+\`\`\`
+
+### Application Types You Can Build
+
+- **Trading Bots**: Automated trading based on price thresholds, trends, or signals
+- **Price Monitors**: Alert systems for price movements via email, SMS, Discord, Telegram
+- **Web Dashboards**: React/Next.js apps displaying market data and portfolio
+- **API Backends**: Express/Fastify servers exposing market data to frontends
+- **Analytics Tools**: Scripts that analyze historical prices and trends
+- **Arbitrage Scanners**: Tools that find and execute arbitrage opportunities
+- **Portfolio Trackers**: Apps that track positions across multiple markets
+- **Notification Services**: Webhooks that trigger on market events
+- **Discord/Telegram Bots**: Chat bots that provide market info and execute trades
+
+For ALL of these, use the MCP helper functions above. Never make direct API calls to Polymarket or other services.`;
 var Agent = class {
   anthropic;
   mcpClient;

@@ -310,7 +310,130 @@ export const filesystemTools: Tool[] = [
       required: ['path', 'old_string', 'new_string'],
     },
   },
+  {
+    name: 'setup_env',
+    description: 'Setup or update environment variables in a .env file for an application. Creates .env if it doesn\'t exist. Optionally creates a .env.example template. Use this when building any application that needs API keys or configuration.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        path: {
+          type: 'string',
+          description: 'Path to the .env file (default: ".env" in current directory)',
+        },
+        variables: {
+          type: 'object',
+          description: 'Object with environment variable names as keys and values. Example: { "QUANTISH_API_KEY": "abc123", "TOKEN_ID": "xyz" }',
+          additionalProperties: { type: 'string' },
+        },
+        overwrite: {
+          type: 'boolean',
+          description: 'If true, overwrite existing variables. Default false (skip existing).',
+        },
+        create_example: {
+          type: 'boolean',
+          description: 'If true, also create a .env.example template file with placeholder values.',
+        },
+      },
+      required: ['variables'],
+    },
+  },
 ];
+
+/**
+ * Setup or update environment variables in a .env file
+ * Creates .env if it doesn't exist, appends/updates variables if it does
+ */
+export async function setupEnv(
+  envPath: string = '.env',
+  variables: Record<string, string>,
+  options?: { overwrite?: boolean; createExample?: boolean }
+): Promise<LocalToolResult> {
+  try {
+    const resolvedPath = path.resolve(envPath);
+    let content = '';
+    const existingVars: Record<string, string> = {};
+    
+    // Read existing .env if it exists
+    if (existsSync(resolvedPath)) {
+      content = await fs.readFile(resolvedPath, 'utf-8');
+      
+      // Parse existing variables
+      for (const line of content.split('\n')) {
+        const trimmed = line.trim();
+        if (trimmed && !trimmed.startsWith('#')) {
+          const eqIndex = trimmed.indexOf('=');
+          if (eqIndex > 0) {
+            const key = trimmed.slice(0, eqIndex);
+            const value = trimmed.slice(eqIndex + 1);
+            existingVars[key] = value;
+          }
+        }
+      }
+    }
+    
+    const updatedVars: string[] = [];
+    const addedVars: string[] = [];
+    const skippedVars: string[] = [];
+    
+    // Process each variable
+    for (const [key, value] of Object.entries(variables)) {
+      if (existingVars[key] !== undefined) {
+        if (options?.overwrite) {
+          // Replace in content
+          const regex = new RegExp(`^${key}=.*$`, 'm');
+          content = content.replace(regex, `${key}=${value}`);
+          updatedVars.push(key);
+        } else {
+          skippedVars.push(key);
+        }
+      } else {
+        // Add new variable
+        if (content && !content.endsWith('\n')) {
+          content += '\n';
+        }
+        content += `${key}=${value}\n`;
+        addedVars.push(key);
+      }
+    }
+    
+    // Write the updated .env file
+    await fs.writeFile(resolvedPath, content, 'utf-8');
+    
+    // Optionally create .env.example
+    if (options?.createExample) {
+      const examplePath = resolvedPath.replace(/\.env$/, '.env.example');
+      let exampleContent = '# Environment variables for this application\n';
+      exampleContent += '# Copy this file to .env and fill in your values\n\n';
+      
+      for (const key of Object.keys({ ...existingVars, ...variables })) {
+        if (key === 'QUANTISH_API_KEY') {
+          exampleContent += `# Get your API key at https://quantish.live\n`;
+          exampleContent += `${key}=your_api_key_here\n\n`;
+        } else {
+          exampleContent += `${key}=\n`;
+        }
+      }
+      
+      await fs.writeFile(examplePath, exampleContent, 'utf-8');
+    }
+    
+    return {
+      success: true,
+      data: {
+        path: resolvedPath,
+        added: addedVars,
+        updated: updatedVars,
+        skipped: skippedVars,
+        exampleCreated: options?.createExample || false,
+      },
+    };
+  } catch (error) {
+    return { 
+      success: false, 
+      error: `Failed to setup env: ${error instanceof Error ? error.message : String(error)}` 
+    };
+  }
+}
 
 /**
  * Execute a filesystem tool
@@ -336,6 +459,15 @@ export async function executeFilesystemTool(name: string, args: Record<string, u
         args.old_string as string,
         args.new_string as string,
         { replaceAll: args.replace_all as boolean | undefined }
+      );
+    case 'setup_env':
+      return setupEnv(
+        (args.path as string) || '.env',
+        args.variables as Record<string, string>,
+        { 
+          overwrite: args.overwrite as boolean | undefined,
+          createExample: args.create_example as boolean | undefined,
+        }
       );
     default:
       return { success: false, error: `Unknown filesystem tool: ${name}` };
