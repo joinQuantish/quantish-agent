@@ -2823,6 +2823,19 @@ Example flow:
 3. Extract tokenId for YES/NO outcome you want
 4. place_order({ conditionId, tokenId, side: "BUY", price: 0.55, size: 100 })
 
+### \u26A0\uFE0F CRITICAL: Market Search Behavior
+When searching for markets:
+1. **ALWAYS look at the actual results** - Don't say "I don't see any" without checking
+2. **Be flexible with timeframes** - If user asks for "15 minute" market, use any similar short-term market (5min, 10min, 30min)
+3. **Show what IS available** - If exact match not found, show the user what markets ARE available
+4. **Extract and use the data** - The search returns clobTokenIds, conditionId, etc. - USE THEM
+5. **Parse the results properly** - Results are in data.result.content[0].text as JSON string
+
+The search results contain EVERYTHING needed:
+- \`markets[].markets[].clobTokenIds\` - Parse this JSON string to get token IDs
+- \`markets[].markets[].conditionId\` - The condition ID for orders
+- \`markets[].title\` - Market title with timeframe info
+
 ### Bot Code Template (Node.js)
 \`\`\`javascript
 #!/usr/bin/env node
