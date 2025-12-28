@@ -3162,13 +3162,16 @@ var Agent = class {
   }
   /**
    * Run the agent with a user message (supports streaming)
+   * @param userMessage - The user's input message
+   * @param options - Optional configuration including abort signal
    */
-  async run(userMessage) {
+  async run(userMessage, options) {
     const maxIterations = this.config.maxIterations ?? 15;
     const model = this.config.model ?? "claude-sonnet-4-5-20250929";
     const maxTokens = this.config.maxTokens ?? 8192;
     const systemPrompt = this.config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
     const useStreaming = this.config.streaming ?? true;
+    const signal = options?.signal;
     const allTools = await this.getAllTools();
     const contextManagement = this.config.contextEditing && this.config.contextEditing.length > 0 ? { edits: this.config.contextEditing } : void 0;
     const contextMessage = `[Working directory: ${this.workingDirectory}]
@@ -3182,6 +3185,9 @@ ${userMessage}`;
     let iterations = 0;
     let finalText = "";
     while (iterations < maxIterations) {
+      if (signal?.aborted) {
+        throw new Error("Operation aborted by user");
+      }
       iterations++;
       this.config.onStreamStart?.();
       let response;
@@ -3206,8 +3212,12 @@ ${userMessage}`;
         if (contextManagement) {
           streamOptions.context_management = contextManagement;
         }
-        const stream = this.anthropic.messages.stream(streamOptions);
+        const stream = this.anthropic.messages.stream(streamOptions, { signal });
         for await (const event of stream) {
+          if (signal?.aborted) {
+            stream.controller.abort();
+            throw new Error("Operation aborted by user");
+          }
           if (event.type === "content_block_delta") {
             const delta = event.delta;
             if (delta.type === "text_delta" && delta.text) {
@@ -3272,6 +3282,9 @@ ${userMessage}`;
       }
       const toolResults = [];
       for (const toolUse of toolUses) {
+        if (signal?.aborted) {
+          throw new Error("Operation aborted by user");
+        }
         this.config.onToolCall?.(toolUse.name, toolUse.input);
         await new Promise((resolve2) => setImmediate(resolve2));
         const { result, source } = await this.executeTool(
@@ -3930,7 +3943,7 @@ Last API Call Cost:
     completedToolCalls.current = [];
     abortController.current = new AbortController();
     try {
-      const result = await agent.run(trimmed);
+      const result = await agent.run(trimmed, { signal: abortController.current?.signal });
       if (isInterrupted) {
         setMessages((prev) => [...prev, {
           role: "system",

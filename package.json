@@ -1,6 +1,6 @@
 {
   "name": "@quantish/agent",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "AI-powered agent for building trading bots on Polymarket",
   "type": "module",
   "bin": {

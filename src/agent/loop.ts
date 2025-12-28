@@ -860,13 +860,16 @@ export class Agent {
 
   /**
    * Run the agent with a user message (supports streaming)
+   * @param userMessage - The user's input message
+   * @param options - Optional configuration including abort signal
    */
-  async run(userMessage: string): Promise<AgentResult> {
+  async run(userMessage: string, options?: { signal?: AbortSignal }): Promise<AgentResult> {
     const maxIterations = this.config.maxIterations ?? 15;
     const model = this.config.model ?? 'claude-sonnet-4-5-20250929';
     const maxTokens = this.config.maxTokens ?? 8192;
     const systemPrompt = this.config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
     const useStreaming = this.config.streaming ?? true;
+    const signal = options?.signal;
 
     // Get all available tools
     const allTools = await this.getAllTools();
@@ -890,6 +893,11 @@ export class Agent {
     let finalText = '';
 
     while (iterations < maxIterations) {
+      // Check if aborted before starting new iteration
+      if (signal?.aborted) {
+        throw new Error('Operation aborted by user');
+      }
+      
       iterations++;
       this.config.onStreamStart?.();
 
@@ -922,10 +930,15 @@ export class Agent {
           streamOptions.context_management = contextManagement;
         }
         
-        const stream = this.anthropic.messages.stream(streamOptions);
+        const stream = this.anthropic.messages.stream(streamOptions, { signal });
 
         // Process stream events
         for await (const event of stream) {
+          // Check for abort during streaming
+          if (signal?.aborted) {
+            stream.controller.abort();
+            throw new Error('Operation aborted by user');
+          }
           if (event.type === 'content_block_delta') {
             const delta = event.delta as any;
             if (delta.type === 'text_delta' && delta.text) {
@@ -1019,6 +1032,11 @@ export class Agent {
       const toolResults: ToolResultBlockParam[] = [];
 
       for (const toolUse of toolUses) {
+        // Check if aborted before each tool execution
+        if (signal?.aborted) {
+          throw new Error('Operation aborted by user');
+        }
+        
         this.config.onToolCall?.(toolUse.name, toolUse.input as Record<string, unknown>);
 
         // Allow UI to render the "pending" state before executing
