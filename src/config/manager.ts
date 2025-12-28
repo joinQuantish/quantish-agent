@@ -38,7 +38,7 @@ const schema = {
   },
   model: {
     type: 'string' as const,
-    default: 'claude-sonnet-4-5-20250929',
+    default: 'claude-sonnet-4-20250514',
   },
 };
 
@@ -140,7 +140,7 @@ class ConfigManager {
    * Get the model to use
    */
   getModel(): string {
-    return this.conf.get('model') ?? 'claude-sonnet-4-5-20250929';
+    return this.conf.get('model') ?? 'claude-sonnet-4-20250514';
   }
 
   /**
