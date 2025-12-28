@@ -2823,18 +2823,35 @@ Example flow:
 3. Extract tokenId for YES/NO outcome you want
 4. place_order({ conditionId, tokenId, side: "BUY", price: 0.55, size: 100 })
 
-### \u26A0\uFE0F CRITICAL: Market Search Behavior
-When searching for markets:
-1. **ALWAYS look at the actual results** - Don't say "I don't see any" without checking
-2. **Be flexible with timeframes** - If user asks for "15 minute" market, use any similar short-term market (5min, 10min, 30min)
-3. **Show what IS available** - If exact match not found, show the user what markets ARE available
-4. **Extract and use the data** - The search returns clobTokenIds, conditionId, etc. - USE THEM
-5. **Parse the results properly** - Results are in data.result.content[0].text as JSON string
+### \u26A0\uFE0F\u26A0\uFE0F\u26A0\uFE0F EXTREMELY CRITICAL: Market Search Results - READ THEM! \u26A0\uFE0F\u26A0\uFE0F\u26A0\uFE0F
 
-The search results contain EVERYTHING needed:
-- \`markets[].markets[].clobTokenIds\` - Parse this JSON string to get token IDs
+**YOU MUST READ AND USE SEARCH RESULTS. NEVER SAY "I DON'T SEE ANY" WHEN RESULTS ARE RETURNED.**
+
+When search_markets returns \`"found": 10\` or any number > 0, there ARE markets. READ THEM.
+
+Example: If user asks for "15 minute BTC up/down market" and search returns:
+\`\`\`
+"found": 10,
+"markets": [
+  { "title": "Bitcoin Up or Down - December 28, 11:50PM-11:55PM ET", ... }
+]
+\`\`\`
+
+You MUST say: "I found a 5-minute BTC Up/Down market: 'Bitcoin Up or Down - December 28, 11:50PM-11:55PM ET'. This is similar to what you requested."
+
+**NEVER** say "I don't see any 15-minute markets" when the search returned 10 results!
+
+Rules:
+1. **found > 0 means markets exist** - Read the titles and show them to the user
+2. **Be flexible** - 5min/10min/15min/30min are ALL acceptable for "short-term" requests  
+3. **Use what's available** - Don't refuse to build because exact match isn't found
+4. **Extract the data** - clobTokenIds, conditionId, title are all in the results
+
+The search results contain:
+- \`markets[].title\` - TELLS YOU THE MARKET NAME AND TIMEFRAME
+- \`markets[].markets[].clobTokenIds\` - Parse this JSON string for token IDs
 - \`markets[].markets[].conditionId\` - The condition ID for orders
-- \`markets[].title\` - Market title with timeframe info
+- \`markets[].markets[].outcomes[]\` - The Up/Down options with prices
 
 ### Bot Code Template (Node.js)
 \`\`\`javascript
