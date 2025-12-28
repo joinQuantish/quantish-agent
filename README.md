@@ -1,45 +1,19 @@
-# @quantish/cli
+# @quantish/agent
 
-AI-powered CLI agent for building trading bots on Polymarket.
+AI-powered CLI agent for building trading bots and applications on Polymarket.
 
 Combines **coding tools** (file system, shell, git) with **trading tools** (Polymarket orders, positions, wallet) powered by Claude AI.
-
-## How It Works
-
-Quantish CLI connects to the **Quantish Signing Server** to execute trades on Polymarket. Here's why:
-
-### Why We Use a Signing Server
-
-Polymarket uses a **gasless relayer system** - this means:
-- ✅ **Free wallet creation** - No MATIC needed to set up
-- ✅ **Free trading** - Polymarket covers gas fees on all transactions
-- ✅ **Simplified signing** - Our server handles the complex signature formats
-
-To make this work reliably, the Quantish Signing Server:
-1. **Handles wallet creation** - Your wallet is created and managed through our server
-2. **Signs transactions** - Orders are signed using Polymarket's required format
-3. **Relays to Polymarket** - Transactions go through Polymarket's official relayer
-4. **Bypasses geo-restrictions** - Our server is hosted in a compatible region
-
-### What This Means for You
-
-- **Your funds are secure** - Only you can authorize transactions via your API key
-- **Wallets are non-custodial** - You can export your private key anytime with `export_private_key`
-- **Trading is free** - No gas fees, ever
-- **It just works** - No VPN or complex setup needed
-
-> 🔒 **Security Note**: Your private keys are stored encrypted. You can export them and migrate to a self-hosted solution in the future if needed.
 
 ## Installation
 
 ```bash
-npm install -g @quantish/cli
+npm install -g @quantish/agent
 ```
 
 Or run directly with npx:
 
 ```bash
-npx @quantish/cli
+npx @quantish/agent
 ```
 
 ## Quick Start
@@ -67,15 +41,15 @@ quantish
 Example conversations:
 
 ```
-You: Create a trading bot that monitors my positions and sells when profit > 20%
-Assistant: I'll create that for you. Let me first check your current positions...
-[Calling get_positions...]
-[Writing bot.ts...]
+You: Create a trading bot that monitors Bitcoin markets and alerts on price changes
+Assistant: I'll create that for you. Let me first search for Bitcoin markets...
+[Calling search_markets...]
+[Writing bitcoin-monitor.js...]
 
 You: What's my current balance?
-Assistant: Your Safe wallet has 0.68 USDC available for trading.
+Assistant: Your Safe wallet has 125.50 USDC available for trading.
 
-You: Place a $5 YES order on Trump winning at 55 cents
+You: Place a $10 YES order on Trump winning at 55 cents
 Assistant: Order placed! Order ID: abc123...
 ```
 
@@ -85,12 +59,6 @@ Assistant: Order placed! Order ID: abc123...
 quantish -p "check my open orders"
 ```
 
-**Piped input:**
-
-```bash
-echo "show my positions" | quantish
-```
-
 ## Commands
 
 | Command | Description |
@@ -98,6 +66,8 @@ echo "show my positions" | quantish
 | `quantish` | Start interactive chat |
 | `quantish init` | Configure API keys |
 | `quantish config` | View configuration |
+| `quantish config --server <url>` | Set custom MCP server URL |
+| `quantish config --export` | Export keys for standalone apps |
 | `quantish tools` | List available tools |
 | `quantish -p "..."` | Run one-shot prompt |
 
@@ -112,6 +82,132 @@ echo "show my positions" | quantish
 | `--version` | Show version |
 | `--help` | Show help |
 
+## Building Standalone Applications
+
+The real power of Quantish is building standalone applications that interact with prediction markets. The agent can create trading bots, web dashboards, notification systems, and more.
+
+### MCP API Overview
+
+There are two MCP endpoints:
+
+| Endpoint | Purpose | Auth Required |
+|----------|---------|---------------|
+| Trading API | Wallet, orders, positions | Yes (QUANTISH_API_KEY) |
+| Discovery API | Search markets, prices | No (public key) |
+
+### Trading API (Requires Your API Key)
+
+```javascript
+const response = await fetch('https://quantish-sdk-production.up.railway.app/mcp/execute', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'x-api-key': process.env.QUANTISH_API_KEY
+  },
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'tools/call',
+    params: { name: 'get_balances', arguments: {} },
+    id: Date.now()
+  })
+});
+
+const data = await response.json();
+const result = JSON.parse(data.result.content[0].text);
+```
+
+**Trading Tools:** `get_balances`, `get_positions`, `place_order`, `cancel_order`, `get_orders`, `get_orderbook`, `get_price`, `transfer_usdc`
+
+### Discovery API (Free, No Auth)
+
+```javascript
+const response = await fetch('https://quantish.live/mcp/execute', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-API-Key': 'qm_ueQeqrmvZyHtR1zuVbLYkhx0fKyVAuV8'  // Public key
+  },
+  body: JSON.stringify({
+    name: 'search_markets',           // Simple format for Discovery
+    arguments: { query: 'bitcoin', limit: 5 }
+  })
+});
+
+const data = await response.json();
+const result = JSON.parse(data.result.content[0].text);
+```
+
+**Discovery Tools:** `search_markets`, `get_market_details`, `get_trending_markets`, `find_arbitrage`
+
+### Example: Ask the Agent to Build an App
+
+```bash
+quantish
+> Create a Node.js script that monitors Bitcoin markets and sends a Discord notification when prices move more than 10%
+```
+
+The agent will create all necessary files:
+- Main application code with MCP helper functions
+- `package.json` with dependencies
+- `.env.example` with required environment variables
+- `README.md` with setup instructions
+
+## Architecture
+
+```
+quantish (CLI)
+    │
+    ├── Local Tools (filesystem, shell, git)
+    │   └── Runs directly on your machine
+    │
+    └── MCP Tools (trading + discovery)
+        ├── Trading MCP (your wallet, orders)
+        │   └── https://quantish-sdk-production.up.railway.app/mcp
+        │
+        └── Discovery MCP (public market data)
+            └── https://quantish.live/mcp
+```
+
+## Self-Hosting
+
+You can run your own Trading MCP server for full control over your wallet keys.
+
+### Configure Custom Server
+
+```bash
+# Set via CLI
+quantish config --server https://your-server.com/mcp
+
+# Or via environment variable
+export MCP_SERVER_URL=https://your-server.com/mcp
+```
+
+### What You Need
+
+1. **Server**: Deploy the `quantish-server` to Railway, Render, or your own VPS
+2. **Database**: PostgreSQL for user data and encrypted keys
+3. **Polymarket Builder Credentials**: Apply at https://polymarket.com/builder
+
+See [Self-Hosting Guide](https://quantish.live/docs/self-hosting.html) for full instructions.
+
+## Configuration
+
+Configuration is stored in `~/.quantish/config.json`:
+
+```json
+{
+  "anthropicApiKey": "sk-ant-...",
+  "quantishApiKey": "qtsh_...",
+  "mcpServerUrl": "https://quantish-sdk-production.up.railway.app/mcp",
+  "model": "claude-sonnet-4-5-20250929"
+}
+```
+
+Environment variables take precedence:
+- `ANTHROPIC_API_KEY`
+- `QUANTISH_API_KEY`
+- `MCP_SERVER_URL`
+
 ## Available Tools
 
 ### Local Tools (Coding)
@@ -120,9 +216,10 @@ echo "show my positions" | quantish
 |------|-------------|
 | `read_file` | Read file contents |
 | `write_file` | Write/create files |
+| `edit_file` | Search and replace in files |
 | `list_dir` | List directory contents |
 | `delete_file` | Delete files |
-| `file_exists` | Check if file exists |
+| `setup_env` | Create/update .env files |
 | `run_command` | Execute shell commands |
 | `grep` | Search file contents |
 | `find_files` | Find files by pattern |
@@ -130,11 +227,6 @@ echo "show my positions" | quantish
 | `git_diff` | Show git diff |
 | `git_add` | Stage files |
 | `git_commit` | Create commits |
-| `git_log` | Show commit history |
-| `git_checkout` | Switch branches |
-| `web_search` | Search the web (Exa/DuckDuckGo) |
-| `web_answer` | AI-powered Q&A (Exa) |
-| `fetch_url` | Fetch URL content |
 
 ### MCP Tools (Trading)
 
@@ -148,88 +240,15 @@ echo "show my positions" | quantish
 | `get_orderbook` | Get market orderbook |
 | `get_price` | Get current price |
 | `transfer_usdc` | Transfer USDC |
-| `swap_tokens` | Swap tokens |
-| `claim_winnings` | Claim from resolved markets |
 
-## Configuration
+### MCP Tools (Discovery)
 
-Configuration is stored in `~/.quantish/config.json`:
-
-```json
-{
-  "anthropicApiKey": "sk-ant-...",
-  "quantishApiKey": "pk_live_...",
-  "mcpServerUrl": "https://quantish-sdk-production.up.railway.app/mcp"
-}
-```
-
-Environment variables take precedence:
-- `ANTHROPIC_API_KEY`
-- `QUANTISH_API_KEY`
-
-## Examples
-
-### Build a Trading Bot
-
-```bash
-quantish
-> Create a Python script that monitors the Trump market and alerts me when price drops below 40 cents
-```
-
-### Manage Positions
-
-```bash
-quantish -p "show me my positions with unrealized P&L"
-```
-
-### Market Making
-
-```bash
-quantish
-> Help me set up a basic market making strategy. I want to place both bid and ask orders around the current mid price.
-```
-
-### Code Review
-
-```bash
-quantish
-> Read my trading bot code in bot.ts and suggest improvements
-```
-
-## Development
-
-```bash
-# Clone the repo
-git clone https://github.com/quantish/cli
-
-# Install dependencies
-cd packages/quantish-cli
-npm install
-
-# Build
-npm run build
-
-# Run locally
-npm start
-
-# Development mode (watch)
-npm run dev
-```
-
-## Architecture
-
-```
-quantish (CLI)
-    │
-    ├── Local Tools (filesystem, shell, git)
-    │   └── Runs directly on your machine
-    │
-    └── MCP Tools (trading)
-        └── Calls Quantish MCP Server
-            └── Executes on Polymarket
-```
-
-The agent uses Claude to understand your requests and decide which tools to use. It can combine coding and trading tools in a single conversation.
+| Tool | Description |
+|------|-------------|
+| `search_markets` | Search markets by keyword |
+| `get_market_details` | Get full market info |
+| `get_trending_markets` | Popular markets |
+| `find_arbitrage` | Find price discrepancies |
 
 ## Platform Support
 
@@ -239,23 +258,16 @@ The agent uses Claude to understand your requests and decide which tools to use.
 | Linux | ✅ Full support |
 | Windows | ⚠️ Requires WSL |
 
-**Windows users:** Install [WSL (Windows Subsystem for Linux)](https://learn.microsoft.com/en-us/windows/wsl/install) and run Quantish from within WSL. Native Windows (PowerShell/cmd.exe) is not supported.
+**Windows users:** Install [WSL](https://learn.microsoft.com/en-us/windows/wsl/install) and run Quantish from within WSL.
 
-## Environment Variables
+## How It Works
 
-| Variable | Description |
-|----------|-------------|
-| `ANTHROPIC_API_KEY` | Your Anthropic API key (required) |
-| `QUANTISH_API_KEY` | Your Quantish trading API key |
-| `EXA_API_KEY` | Optional: Exa AI search key for powerful web search |
+Quantish CLI connects to the **Quantish Signing Server** to execute trades on Polymarket:
 
-### Web Search
-
-Web search works without API keys (using DuckDuckGo fallback), but **Exa is strongly recommended** for AI-quality search results.
-
-Get your Exa API key at: https://dashboard.exa.ai
-
-Exa is the same search engine used by Cursor, Notion, Vercel, and other leading AI products.
+- **Your funds are secure** - Only you can authorize transactions via your API key
+- **Wallets are non-custodial** - Export your private key anytime with `export_private_key`
+- **Trading is free** - No gas fees (Polymarket covers them)
+- **Self-hosting available** - Run your own server for full control
 
 ## License
 

@@ -70,8 +70,11 @@ var ConfigManager = class {
   }
   /**
    * Get the Trading MCP server URL (user's wallet/orders)
+   * Priority: MCP_SERVER_URL env var > config file > default
    */
   getMcpServerUrl() {
+    const envUrl = process.env.MCP_SERVER_URL;
+    if (envUrl) return envUrl;
     return this.conf.get("mcpServerUrl") ?? DEFAULT_MCP_URL;
   }
   /**
@@ -97,6 +100,12 @@ var ConfigManager = class {
    */
   setMcpServerUrl(url) {
     this.conf.set("mcpServerUrl", url);
+  }
+  /**
+   * Generic setter for any config key
+   */
+  set(key, value) {
+    this.conf.set(key, value);
   }
   /**
    * Get the model to use
@@ -4206,8 +4215,19 @@ program.name("quantish").description("AI coding & trading agent for Polymarket")
 program.command("init").description("Configure Quantish CLI with your API keys").action(async () => {
   await runSetup();
 });
-program.command("config").description("View or edit configuration").option("-s, --show", "Show current configuration").option("-c, --clear", "Clear all configuration").option("--path", "Show config file path").option("--export", "Export configuration as .env format").option("--show-keys", "Show full API keys (use with caution)").action(async (options) => {
+program.command("config").description("View or edit configuration").option("-s, --show", "Show current configuration").option("-c, --clear", "Clear all configuration").option("--path", "Show config file path").option("--export", "Export configuration as .env format").option("--show-keys", "Show full API keys (use with caution)").option("--server <url>", "Set custom Trading MCP server URL").action(async (options) => {
   const config = getConfigManager();
+  if (options.server) {
+    try {
+      new URL(options.server);
+    } catch {
+      error("Invalid URL format. Please provide a valid URL (e.g., https://your-server.com/mcp)");
+      return;
+    }
+    config.set("mcpServerUrl", options.server);
+    success(`Trading MCP server URL set to: ${options.server}`);
+    return;
+  }
   if (options.path) {
     console.log(config.getConfigPath());
     return;

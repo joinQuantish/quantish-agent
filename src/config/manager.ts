@@ -92,8 +92,12 @@ class ConfigManager {
 
   /**
    * Get the Trading MCP server URL (user's wallet/orders)
+   * Priority: MCP_SERVER_URL env var > config file > default
    */
   getMcpServerUrl(): string {
+    const envUrl = process.env.MCP_SERVER_URL;
+    if (envUrl) return envUrl;
+    
     return this.conf.get('mcpServerUrl') ?? DEFAULT_MCP_URL;
   }
 
@@ -123,6 +127,13 @@ class ConfigManager {
    */
   setMcpServerUrl(url: string): void {
     this.conf.set('mcpServerUrl', url);
+  }
+
+  /**
+   * Generic setter for any config key
+   */
+  set<K extends keyof QuantishConfig>(key: K, value: QuantishConfig[K]): void {
+    this.conf.set(key, value);
   }
 
   /**

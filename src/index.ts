@@ -76,8 +76,22 @@ program
   .option('--path', 'Show config file path')
   .option('--export', 'Export configuration as .env format')
   .option('--show-keys', 'Show full API keys (use with caution)')
+  .option('--server <url>', 'Set custom Trading MCP server URL')
   .action(async (options) => {
     const config = getConfigManager();
+
+    if (options.server) {
+      // Validate URL format
+      try {
+        new URL(options.server);
+      } catch {
+        ui.error('Invalid URL format. Please provide a valid URL (e.g., https://your-server.com/mcp)');
+        return;
+      }
+      config.set('mcpServerUrl', options.server);
+      ui.success(`Trading MCP server URL set to: ${options.server}`);
+      return;
+    }
 
     if (options.path) {
       console.log(config.getConfigPath());
