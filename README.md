@@ -352,10 +352,13 @@ npm link  # Install locally
 
 ## License
 
-MIT
+This project is licensed under the [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/).
+
+**Free for personal use, research, and non-commercial purposes.** Commercial use requires explicit permission from Quantish Inc. Contact hello@quantish.live for commercial licensing.
 
 ## Links
 
+- [Agent Website](https://agent.quantish.live)
 - [GitHub](https://github.com/joinQuantish/quantish-agent)
 - [NPM](https://www.npmjs.com/package/@quantish/agent)
 - [Documentation](https://docs.quantish.live)

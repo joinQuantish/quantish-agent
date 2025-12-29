@@ -32,7 +32,7 @@
     "trading-bot"
   ],
   "author": "Quantish <hello@quantish.live>",
-  "license": "MIT",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "publishConfig": {
     "access": "public"
   },
