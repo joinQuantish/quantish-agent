@@ -5,6 +5,8 @@ import Spinner from 'ink-spinner';
 import { Agent, ToolCall, TokenUsage } from '../agent/loop.js';
 import { processManager, ProcessInfo } from '../tools/index.js';
 import { listModels, getModelConfig, formatCost } from '../agent/pricing.js';
+import { listOpenRouterModels, getOpenRouterModelConfig } from '../agent/openrouter.js';
+import { getSessionManager } from '../config/sessions.js';
 
 // Format token count for display (e.g., 12345 -> "12.3k")
 function formatTokenCount(count: number): string {
@@ -45,7 +47,8 @@ const SLASH_COMMANDS = [
   { cmd: '/help', desc: 'Show available commands' },
   { cmd: '/clear', desc: 'Clear conversation history' },
   { cmd: '/compact', desc: 'Summarize conversation to save tokens' },
-  { cmd: '/model', desc: 'Switch model (opus, sonnet, haiku)' },
+  { cmd: '/model', desc: 'Switch model (opus, sonnet, haiku, minimax, etc.)' },
+  { cmd: '/provider', desc: 'Switch LLM provider (anthropic, openrouter)' },
   { cmd: '/cost', desc: 'Show session cost breakdown' },
   { cmd: '/tools', desc: 'List available tools' },
   { cmd: '/config', desc: 'Show configuration info' },
@@ -91,6 +94,19 @@ function formatResult(result: unknown, maxLength = 200): string {
   return String(result);
 }
 
+// Filter out model-specific markers from text (GLM 4.7, etc.)
+function cleanModelOutput(text: string): string {
+  if (!text) return text;
+  return text
+    .replace(/<tool_call>/g, '')
+    .replace(/<\/tool_call>/g, '')
+    .replace(/<arg_key>/g, '')
+    .replace(/<\/arg_key>/g, '')
+    .replace(/<function_call>/g, '')
+    .replace(/<\/function_call>/g, '')
+    .trim();
+}
+
 export function App({ agent, onExit }: AppProps) {
   const { exit } = useApp();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -116,6 +132,14 @@ export function App({ agent, onExit }: AppProps) {
   
   // AbortController for interrupting requests
   const abortController = useRef<AbortController | null>(null);
+  
+  // Queued input - allows user to type while agent is processing
+  const [queuedInput, setQueuedInput] = useState<string>('');
+  const [hasQueuedMessage, setHasQueuedMessage] = useState(false);
+  
+  // Session manager for persistence
+  const sessionManager = useMemo(() => getSessionManager(), []);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
   // Handle slash commands
   const handleSlashCommand = useCallback((command: string): boolean => {
@@ -129,19 +153,34 @@ export function App({ agent, onExit }: AppProps) {
           content: `📚 Available Commands:
 /clear      - Clear conversation history
 /compact    - Summarize conversation (keeps context, saves tokens)
-/model      - Switch model (opus, sonnet, haiku) 
+/model      - Switch model (opus, sonnet, haiku, minimax, etc.)
+/provider   - Switch LLM provider (anthropic, openrouter)
 /cost       - Show session cost breakdown
 /help       - Show this help message
 /tools      - List available tools
 /config     - Show configuration info
+
+🗂️ Session Commands:
+/save [name] - Save current session
+/resume      - Resume last session
+/sessions    - List saved sessions
+/load <id>   - Load a saved session
+/forget      - Delete all saved sessions
+
+📋 Process Commands:
 /processes  - List running background processes
 /stop <id>  - Stop a background process by ID
 /stopall    - Stop all background processes
+
 /exit       - Exit the CLI
 
 ⌨️ Keyboard Shortcuts:
-Esc         - Interrupt current generation
-Ctrl+C      - Exit (stops all processes)`
+Esc         - Interrupt current generation (or send queued message)
+Enter       - Queue message while agent is working
+Ctrl+C      - Exit (stops all processes)
+
+💡 Tip: You can type while the agent is working. Press Enter to queue
+        your message. Press Esc to interrupt and send immediately.`
         }]);
         return true;
         
@@ -289,30 +328,51 @@ Ctrl+C      - Exit (stops all processes)`
         if (!args) {
           // Show current model and available options
           const currentModel = agent.getModel();
+          const currentProvider = agent.getProvider();
           const modelConfig = getModelConfig(currentModel);
-          const models = listModels();
-          const modelList = models.map(m => {
+          const orModelConfig = getOpenRouterModelConfig(currentModel);
+          const displayName = modelConfig?.displayName || orModelConfig?.displayName || currentModel;
+          
+          // Anthropic models
+          const anthropicModels = listModels();
+          const anthropicList = anthropicModels.map(m => {
             const isCurrent = m.id === currentModel ? ' (current)' : '';
             return `  ${m.name}${isCurrent} - ${m.description}`;
           }).join('\n');
           
+          // OpenRouter models (show a selection)
+          const orModels = listOpenRouterModels().slice(0, 8);
+          const orList = orModels.map(m => {
+            const isCurrent = m.id === currentModel ? ' (current)' : '';
+            return `  ${m.name}${isCurrent} - ${m.description.slice(0, 50)}...`;
+          }).join('\n');
+          
           setMessages(prev => [...prev, { 
             role: 'system', 
-            content: `🤖 Current model: ${modelConfig?.displayName || currentModel}
+            content: `🤖 Current: ${displayName} (${currentProvider})
 
-Available models:
-${modelList}
+Anthropic Models:
+${anthropicList}
 
-Usage: /model <name>  (e.g., /model haiku, /model opus)`
+OpenRouter Models (selection):
+${orList}
+  ... and many more! Use any OpenRouter model ID like 'minimax/minimax-m2.1'
+
+Usage: /model <name>  (e.g., /model haiku, /model minimax)
+       Using an OpenRouter model auto-switches to OpenRouter provider.`
           }]);
           return true;
         }
         const result = agent.setModel(args);
         if (result.success) {
-          const newConfig = getModelConfig(agent.getModel());
+          // Check both Anthropic and OpenRouter configs for description
+          const anthropicConfig = getModelConfig(agent.getModel());
+          const orConfig = getOpenRouterModelConfig(agent.getModel());
+          const description = anthropicConfig?.description || orConfig?.description || '';
+          const providerInfo = agent.isOpenRouter() ? ' (OpenRouter)' : ' (Anthropic)';
           setMessages(prev => [...prev, { 
             role: 'system', 
-            content: `✅ Switched to ${result.model}\n   ${newConfig?.description || ''}`
+            content: `✅ Switched to ${result.model}${providerInfo}\n   ${description}`
           }]);
         } else {
           setMessages(prev => [...prev, { 
@@ -320,6 +380,46 @@ Usage: /model <name>  (e.g., /model haiku, /model opus)`
             content: `❌ ${result.error}`
           }]);
         }
+        return true;
+
+      case 'provider':
+        if (!args) {
+          const currentProvider = agent.getProvider();
+          setMessages(prev => [...prev, {
+            role: 'system',
+            content: `🔧 LLM Provider
+
+Current: ${currentProvider}
+
+Available providers:
+  anthropic   - Claude models (Opus, Sonnet, Haiku)
+  openrouter  - Multi-provider access (MiniMax, DeepSeek, Gemini, etc.)
+
+Usage: /provider <name>  (e.g., /provider openrouter)
+
+Note: When switching to OpenRouter, make sure OPENROUTER_API_KEY is set.
+      You can also just use /model with an OpenRouter model name.`
+          }]);
+          return true;
+        }
+        
+        const providerArg = args.toLowerCase();
+        if (providerArg !== 'anthropic' && providerArg !== 'openrouter') {
+          setMessages(prev => [...prev, { 
+            role: 'system', 
+            content: `❌ Unknown provider: "${args}". Use: anthropic, openrouter`
+          }]);
+          return true;
+        }
+        
+        agent.setProvider(providerArg as 'anthropic' | 'openrouter');
+        const providerModels = providerArg === 'openrouter' 
+          ? 'minimax, deepseek, gemini, grok, devstral'
+          : 'opus, sonnet, haiku';
+        setMessages(prev => [...prev, { 
+          role: 'system', 
+          content: `✅ Switched to ${providerArg} provider\n   Available models: ${providerModels}\n   Use /model to select a model.`
+        }]);
         return true;
 
       case 'cost':
@@ -348,8 +448,173 @@ Last API Call Cost:
         }]);
         return true;
 
+      case 'save':
+        // Save current session
+        try {
+          const conversationHistory = agent.getConversationHistory();
+          if (conversationHistory.length === 0) {
+            setMessages(prev => [...prev, { 
+              role: 'system', 
+              content: '❌ Nothing to save - conversation is empty.'
+            }]);
+            return true;
+          }
+          const savedSession = sessionManager.saveSession(
+            conversationHistory,
+            agent.getModel(),
+            agent.getProvider(),
+            args || undefined,
+            currentSessionId || undefined
+          );
+          setCurrentSessionId(savedSession.id);
+          setMessages(prev => [...prev, { 
+            role: 'system', 
+            content: `✅ Session saved: "${savedSession.name}"\n   ID: ${savedSession.id}\n   Messages: ${conversationHistory.length}`
+          }]);
+        } catch (err) {
+          setMessages(prev => [...prev, { 
+            role: 'system', 
+            content: `❌ Failed to save session: ${err instanceof Error ? err.message : String(err)}`
+          }]);
+        }
+        return true;
+      
+      case 'resume':
+        // Resume last session
+        try {
+          const lastSession = sessionManager.getLastSession();
+          if (!lastSession) {
+            setMessages(prev => [...prev, { 
+              role: 'system', 
+              content: '❌ No previous session to resume.'
+            }]);
+            return true;
+          }
+          // Restore conversation
+          agent.setConversationHistory(lastSession.messages);
+          agent.setModel(lastSession.model);
+          if (lastSession.provider) {
+            agent.setProvider(lastSession.provider);
+          }
+          setCurrentSessionId(lastSession.id);
+          setMessages([{ 
+            role: 'system', 
+            content: `✅ Resumed session: "${lastSession.name}"\n   ${lastSession.messages.length} messages loaded\n   Model: ${lastSession.model} (${lastSession.provider})`
+          }]);
+        } catch (err) {
+          setMessages(prev => [...prev, { 
+            role: 'system', 
+            content: `❌ Failed to resume session: ${err instanceof Error ? err.message : String(err)}`
+          }]);
+        }
+        return true;
+      
+      case 'sessions':
+        // List all sessions
+        try {
+          const sessions = sessionManager.listSessions();
+          if (sessions.length === 0) {
+            setMessages(prev => [...prev, { 
+              role: 'system', 
+              content: '📋 No saved sessions.'
+            }]);
+            return true;
+          }
+          const sessionList = sessions.slice(0, 10).map((s, i) => {
+            const isCurrent = s.id === currentSessionId ? ' (current)' : '';
+            const date = new Date(s.updatedAt).toLocaleDateString();
+            return `  ${i + 1}. ${s.name}${isCurrent}\n     ID: ${s.id} | ${s.messageCount} msgs | ${date}`;
+          }).join('\n\n');
+          
+          const moreText = sessions.length > 10 ? `\n\n... and ${sessions.length - 10} more` : '';
+          
+          setMessages(prev => [...prev, { 
+            role: 'system', 
+            content: `🗂️ Saved Sessions:\n\n${sessionList}${moreText}\n\nUse /load <id> to load a session.`
+          }]);
+        } catch (err) {
+          setMessages(prev => [...prev, { 
+            role: 'system', 
+            content: `❌ Failed to list sessions: ${err instanceof Error ? err.message : String(err)}`
+          }]);
+        }
+        return true;
+      
+      case 'load':
+        // Load a session by ID or name
+        if (!args) {
+          setMessages(prev => [...prev, { 
+            role: 'system', 
+            content: '❓ Usage: /load <session_id>\n   Use /sessions to see saved sessions.'
+          }]);
+          return true;
+        }
+        try {
+          let loadSession = sessionManager.getSession(args);
+          if (!loadSession) {
+            // Try by name
+            loadSession = sessionManager.getSessionByName(args);
+          }
+          if (!loadSession) {
+            setMessages(prev => [...prev, { 
+              role: 'system', 
+              content: `❌ Session not found: "${args}"`
+            }]);
+            return true;
+          }
+          // Restore conversation
+          agent.setConversationHistory(loadSession.messages);
+          agent.setModel(loadSession.model);
+          if (loadSession.provider) {
+            agent.setProvider(loadSession.provider);
+          }
+          setCurrentSessionId(loadSession.id);
+          setMessages([{ 
+            role: 'system', 
+            content: `✅ Loaded session: "${loadSession.name}"\n   ${loadSession.messages.length} messages loaded\n   Model: ${loadSession.model} (${loadSession.provider})`
+          }]);
+        } catch (err) {
+          setMessages(prev => [...prev, { 
+            role: 'system', 
+            content: `❌ Failed to load session: ${err instanceof Error ? err.message : String(err)}`
+          }]);
+        }
+        return true;
+      
+      case 'forget':
+        // Delete all sessions
+        try {
+          sessionManager.clearAllSessions();
+          setCurrentSessionId(null);
+          setMessages(prev => [...prev, { 
+            role: 'system', 
+            content: '✅ All sessions deleted.'
+          }]);
+        } catch (err) {
+          setMessages(prev => [...prev, { 
+            role: 'system', 
+            content: `❌ Failed to clear sessions: ${err instanceof Error ? err.message : String(err)}`
+          }]);
+        }
+        return true;
+
       case 'exit':
       case 'quit':
+        // Auto-save session before exiting (if there's conversation)
+        try {
+          const history = agent.getConversationHistory();
+          if (history.length > 0) {
+            sessionManager.saveSession(
+              history,
+              agent.getModel(),
+              agent.getProvider(),
+              undefined,
+              currentSessionId || undefined
+            );
+          }
+        } catch {
+          // Ignore save errors on exit
+        }
         // Kill all processes before exiting
         if (processManager.hasRunning()) {
           processManager.killAll();
@@ -369,7 +634,19 @@ Last API Call Cost:
 
   const handleSubmit = useCallback(async (value: string) => {
     const trimmed = value.trim();
-    if (!trimmed || isProcessing) return;
+    if (!trimmed) return;
+    
+    // If currently processing, queue the message for later
+    if (isProcessing) {
+      setQueuedInput(trimmed);
+      setHasQueuedMessage(true);
+      setInput('');
+      setMessages(prev => [...prev, { 
+        role: 'system', 
+        content: `📥 Queued: "${trimmed.length > 50 ? trimmed.slice(0, 50) + '...' : trimmed}"\n   Press Esc to interrupt and send now.`
+      }]);
+      return;
+    }
 
     // Handle slash commands
     if (trimmed.startsWith('/')) {
@@ -409,7 +686,7 @@ Last API Call Cost:
     abortController.current = new AbortController();
 
     try {
-      const result = await agent.run(trimmed, { signal: abortController.current?.signal });
+      const result = await agent.run(trimmed);
       
       // Check if we were interrupted
       if (isInterrupted) {
@@ -422,9 +699,11 @@ Last API Call Cost:
         setMessages(prev => {
           // Remove any streaming message
           const filtered = prev.filter(m => !m.isStreaming);
+          // Clean the response text of any model-specific markers
+          const cleanedText = cleanModelOutput(result.text || '');
           return [...filtered, {
             role: 'assistant',
-            content: result.text || '(completed)',
+            content: cleanedText || '(completed)',
             toolCalls: result.toolCalls.map(tc => ({
               name: tc.name,
               args: tc.input,
@@ -438,23 +717,32 @@ Last API Call Cost:
       
       setStreamingText('');
       setCurrentToolCalls([]);
-    } catch (err: any) {
-      const errorMsg = err.message || String(err);
+    } catch (err: unknown) {
+      // Defensive error handling - ensure errorMsg is always a string
+      const errorMsg = err instanceof Error 
+        ? err.message 
+        : (typeof err === 'string' ? err : 'Unknown error occurred');
       let displayError = errorMsg;
       
-      if (errorMsg.includes('aborted') || errorMsg.includes('AbortError')) {
+      // Safe includes checks with fallback
+      const msgLower = errorMsg.toLowerCase();
+      
+      if (msgLower.includes('aborted') || msgLower.includes('aborterror')) {
         setMessages(prev => [...prev, { 
           role: 'system', 
           content: '⚡ Generation interrupted by user.'
         }]);
-      } else if (errorMsg.includes('credits exhausted')) {
-        displayError = 'Anthropic API credits exhausted. Please add credits at console.anthropic.com';
+      } else if (msgLower.includes('credits exhausted')) {
+        displayError = 'API credits exhausted. Please add credits to your provider.';
         setError(displayError);
-      } else if (errorMsg.includes('invalid_api_key') || errorMsg.includes('401')) {
-        displayError = 'Invalid Anthropic API key. Run "quantish init" to reconfigure.';
+      } else if (msgLower.includes('invalid_api_key') || msgLower.includes('401') || msgLower.includes('unauthorized')) {
+        displayError = 'Invalid API key. Run "quantish init" to reconfigure.';
         setError(displayError);
-      } else if (errorMsg.includes('rate_limit')) {
-        displayError = 'Rate limited by Anthropic API. Please wait a moment and try again.';
+      } else if (msgLower.includes('rate_limit') || msgLower.includes('429')) {
+        displayError = 'Rate limited. Please wait a moment and try again.';
+        setError(displayError);
+      } else if (msgLower.includes('cannot read properties of undefined') || msgLower.includes('undefined')) {
+        displayError = 'Tool call parsing error. The model may have sent malformed output.';
         setError(displayError);
       } else {
         setError(displayError);
@@ -465,6 +753,34 @@ Last API Call Cost:
       abortController.current = null;
     }
   }, [agent, isProcessing, isInterrupted, exit, onExit, handleSlashCommand]);
+  
+  // Track previous processing state to detect transitions
+  const wasProcessing = useRef(false);
+  
+  // Effect to process queued messages after processing completes naturally
+  useEffect(() => {
+    // Only process when transitioning from processing to not processing
+    const justFinished = wasProcessing.current && !isProcessing;
+    wasProcessing.current = isProcessing;
+    
+    if (justFinished && hasQueuedMessage && queuedInput) {
+      const nextMessage = queuedInput;
+      setQueuedInput('');
+      setHasQueuedMessage(false);
+      
+      // Remove the "Queued:" system message
+      setMessages(prev => prev.filter(m => 
+        !(m.role === 'system' && m.content.startsWith('📥 Queued:'))
+      ));
+      
+      // Delay slightly to let UI settle, then send the queued message
+      const timer = setTimeout(() => {
+        handleSubmit(nextMessage);
+      }, 150);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isProcessing, hasQueuedMessage, queuedInput, handleSubmit]);
 
   // Set up agent callbacks
   useEffect(() => {
@@ -476,7 +792,15 @@ Last API Call Cost:
       streaming: true,
       onText: (text: string, isComplete: boolean) => {
         if (!isComplete) {
-          setStreamingText(prev => prev + text);
+          // Filter out <tool_call> markers that some models (GLM 4.7, etc.) emit in streaming
+          const cleanText = text
+            .replace(/<tool_call>/g, '')
+            .replace(/<\/tool_call>/g, '')
+            .replace(/<arg_key>/g, '')
+            .replace(/<\/arg_key>/g, '');
+          if (cleanText) {
+            setStreamingText(prev => prev + cleanText);
+          }
         }
       },
       onThinking: (text: string) => {
@@ -514,7 +838,7 @@ Last API Call Cost:
     };
   }, [agent]);
 
-  // Listen for Ctrl+C and Escape
+  // Listen for Ctrl+C, Escape, and Backspace
   useInput((inputChar, key) => {
     if (key.ctrl && inputChar === 'c') {
       // Kill all background processes before exiting
@@ -527,14 +851,54 @@ Last API Call Cost:
       exit();
     }
     
-    // Escape key to interrupt generation
+    // Backspace with empty input and queued message - un-queue it back to input
+    if (key.backspace && input === '' && hasQueuedMessage && queuedInput) {
+      setInput(queuedInput);
+      setQueuedInput('');
+      setHasQueuedMessage(false);
+      // Remove the "Queued:" system message
+      setMessages(prev => prev.filter(m => 
+        !(m.role === 'system' && m.content.startsWith('📥 Queued:'))
+      ));
+    }
+    
+    // Escape key to interrupt generation and optionally send queued message
     if (key.escape && isProcessing) {
       setIsInterrupted(true);
       abortController.current?.abort();
-      setMessages(prev => [...prev, { 
-        role: 'system', 
-        content: '⚡ Interrupting...'
-      }]);
+      
+      // If there's a queued message, interrupt and send it immediately
+      if (hasQueuedMessage && queuedInput) {
+        const messageToSend = queuedInput;
+        
+        // Clear the queue
+        setQueuedInput('');
+        setHasQueuedMessage(false);
+        
+        // Force stop processing and send the queued message
+        setIsProcessing(false);
+        
+        setMessages(prev => {
+          // Remove the queued indicator
+          const filtered = prev.filter(m => 
+            !(m.role === 'system' && m.content.startsWith('📥 Queued:'))
+          );
+          return [...filtered, { 
+            role: 'system', 
+            content: '⚡ Interrupted. Sending queued message...'
+          }];
+        });
+        
+        // Send the queued message after a short delay
+        setTimeout(() => {
+          handleSubmit(messageToSend);
+        }, 200);
+      } else {
+        setMessages(prev => [...prev, { 
+          role: 'system', 
+          content: '⚡ Interrupting...'
+        }]);
+      }
     }
   });
 
@@ -601,22 +965,15 @@ Last API Call Cost:
             <Box key={i} flexDirection="column">
               <Box>
                 {tc.pending ? (
-                  <>
-                    <Text color="yellow">
-                      <Spinner type="dots" />
-                    </Text>
-                    <Text color="cyan" bold> {tc.name}</Text>
-                    <Text color="gray">{formatArgs(tc.args)}</Text>
-                    <Text color="yellow" dimColor> Running...</Text>
-                  </>
+                  <Text color="cyan">
+                    <Spinner type="dots" /> {tc.name}
+                  </Text>
                 ) : (
-                  <>
-                    <Text color={tc.success ? 'green' : 'red'}>
-                      {tc.success ? '✓' : '✗'} {tc.name}
-                    </Text>
-                    <Text color="gray">{formatArgs(tc.args)}</Text>
-                  </>
+                  <Text color={tc.success ? 'blue' : 'red'}>
+                    {tc.success ? '✓' : '✗'} {tc.name}
+                  </Text>
                 )}
+                <Text color="gray">{formatArgs(tc.args)}</Text>
               </Box>
               {!tc.pending && tc.result && (
                 <Box marginLeft={2}>
@@ -655,11 +1012,16 @@ Last API Call Cost:
         </Box>
       )}
 
-      {/* Processing indicator (when no streaming yet) */}
-      {isProcessing && !streamingText && currentToolCalls.length === 0 && (
+      {/* Processing indicator */}
+      {isProcessing && (
         <Box marginBottom={1}>
           <Text color="cyan">
-            <Spinner type="dots" /> Thinking...
+            <Spinner type="dots" />{' '}
+            {currentToolCalls.length > 0 
+              ? `Working... (${currentToolCalls.filter(tc => tc.pending).length} tool${currentToolCalls.filter(tc => tc.pending).length !== 1 ? 's' : ''} running)`
+              : streamingText 
+                ? 'Generating...'
+                : 'Thinking...'}
           </Text>
         </Box>
       )}
@@ -682,20 +1044,36 @@ Last API Call Cost:
         </Box>
       )}
 
+      {/* Queued message indicator */}
+      {hasQueuedMessage && isProcessing && (
+        <Box marginBottom={1} paddingLeft={2}>
+          <Text color="blue">
+            📥 Queued: {queuedInput.length > 40 ? queuedInput.slice(0, 40) + '...' : queuedInput}
+          </Text>
+          <Text color="gray" dimColor> (Esc to send now)</Text>
+        </Box>
+      )}
+
       {/* Nice input box with border */}
       <Box 
         borderStyle="round" 
-        borderColor={isProcessing ? 'gray' : 'yellow'} 
+        borderColor={hasQueuedMessage ? 'blue' : (isProcessing ? 'gray' : 'yellow')} 
         paddingX={1}
         marginTop={1}
       >
         <Box>
-          <Text color="yellow" bold>❯ </Text>
+          <Text color={hasQueuedMessage ? 'blue' : 'yellow'} bold>❯ </Text>
           <TextInput
             value={input}
             onChange={setInput}
             onSubmit={handleSubmit}
-            placeholder={isProcessing ? 'Processing...' : 'Ask anything or type / for commands'}
+            placeholder={
+              hasQueuedMessage 
+                ? 'Message queued. Type more or press Esc to send now.' 
+                : (isProcessing 
+                  ? 'Type to queue a message...' 
+                  : 'Ask anything or type / for commands')
+            }
           />
         </Box>
       </Box>

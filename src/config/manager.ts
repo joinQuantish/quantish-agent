@@ -8,11 +8,15 @@ import Conf from 'conf';
 import { homedir } from 'os';
 import { join } from 'path';
 
+export type LLMProvider = 'anthropic' | 'openrouter';
+
 export interface QuantishConfig {
   anthropicApiKey?: string;
+  openrouterApiKey?: string;
   quantishApiKey?: string;
   mcpServerUrl: string;
   model?: string;
+  provider?: LLMProvider;
 }
 
 // Trading MCP - requires user's API key for wallet/order operations
@@ -25,8 +29,15 @@ export const DISCOVERY_MCP_PUBLIC_KEY = 'qm_ueQeqrmvZyHtR1zuVbLYkhx0fKyVAuV8';
 // Legacy alias
 const DEFAULT_MCP_URL = DEFAULT_TRADING_MCP_URL;
 
+// Default models per provider
+export const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-5-20250929';
+export const DEFAULT_OPENROUTER_MODEL = 'z-ai/glm-4.7';
+
 const schema = {
   anthropicApiKey: {
+    type: 'string' as const,
+  },
+  openrouterApiKey: {
     type: 'string' as const,
   },
   quantishApiKey: {
@@ -39,6 +50,10 @@ const schema = {
   model: {
     type: 'string' as const,
     default: 'claude-sonnet-4-5-20250929',
+  },
+  provider: {
+    type: 'string' as const,
+    default: 'anthropic',
   },
 };
 
@@ -73,6 +88,24 @@ class ConfigManager {
   }
 
   /**
+   * Get the OpenRouter API key
+   */
+  getOpenRouterApiKey(): string | undefined {
+    // Check environment variable first
+    const envKey = process.env.OPENROUTER_API_KEY;
+    if (envKey) return envKey;
+    
+    return this.conf.get('openrouterApiKey');
+  }
+
+  /**
+   * Set the OpenRouter API key
+   */
+  setOpenRouterApiKey(key: string): void {
+    this.conf.set('openrouterApiKey', key);
+  }
+
+  /**
    * Get the Quantish API key
    */
   getQuantishApiKey(): string | undefined {
@@ -91,13 +124,23 @@ class ConfigManager {
   }
 
   /**
+   * Get the current LLM provider
+   */
+  getProvider(): LLMProvider {
+    return (this.conf.get('provider') as LLMProvider) ?? 'anthropic';
+  }
+
+  /**
+   * Set the LLM provider
+   */
+  setProvider(provider: LLMProvider): void {
+    this.conf.set('provider', provider);
+  }
+
+  /**
    * Get the Trading MCP server URL (user's wallet/orders)
-   * Priority: MCP_SERVER_URL env var > config file > default
    */
   getMcpServerUrl(): string {
-    const envUrl = process.env.MCP_SERVER_URL;
-    if (envUrl) return envUrl;
-    
     return this.conf.get('mcpServerUrl') ?? DEFAULT_MCP_URL;
   }
 
@@ -130,17 +173,15 @@ class ConfigManager {
   }
 
   /**
-   * Generic setter for any config key
-   */
-  set<K extends keyof QuantishConfig>(key: K, value: QuantishConfig[K]): void {
-    this.conf.set(key, value);
-  }
-
-  /**
-   * Get the model to use
+   * Get the model to use (returns default based on current provider)
    */
   getModel(): string {
-    return this.conf.get('model') ?? 'claude-sonnet-4-5-20250929';
+    const model = this.conf.get('model');
+    if (model) return model;
+    
+    // Return default model based on provider
+    const provider = this.getProvider();
+    return provider === 'openrouter' ? DEFAULT_OPENROUTER_MODEL : DEFAULT_ANTHROPIC_MODEL;
   }
 
   /**
@@ -151,13 +192,27 @@ class ConfigManager {
   }
 
   /**
-   * Check if the CLI is configured (has at least Anthropic key)
+   * Check if the CLI is configured (has required LLM API key)
    * Discovery MCP works without any user key (embedded public key)
    * Trading MCP requires a user key
    */
   isConfigured(): boolean {
-    // Only Anthropic key is strictly required - Discovery MCP works without user auth
+    const provider = this.getProvider();
+    if (provider === 'openrouter') {
+      return !!this.getOpenRouterApiKey();
+    }
     return !!this.getAnthropicApiKey();
+  }
+
+  /**
+   * Get the appropriate LLM API key based on current provider
+   */
+  getLLMApiKey(): string | undefined {
+    const provider = this.getProvider();
+    if (provider === 'openrouter') {
+      return this.getOpenRouterApiKey();
+    }
+    return this.getAnthropicApiKey();
   }
 
   /**
@@ -173,9 +228,11 @@ class ConfigManager {
   getAll(): QuantishConfig {
     return {
       anthropicApiKey: this.getAnthropicApiKey(),
+      openrouterApiKey: this.getOpenRouterApiKey(),
       quantishApiKey: this.getQuantishApiKey(),
       mcpServerUrl: this.getMcpServerUrl(),
       model: this.getModel(),
+      provider: this.getProvider(),
     };
   }
 

@@ -101,32 +101,74 @@ export async function runSetup(): Promise<boolean> {
   }
   console.log();
 
-  // Step 1: Anthropic API Key
-  console.log(chalk.bold('Step 1: Anthropic API Key'));
-  console.log(chalk.dim('Powers the AI agent. Get yours at https://console.anthropic.com/'));
+  // Step 1: Choose LLM Provider
+  console.log(chalk.bold('Step 1: Choose your LLM Provider'));
+  console.log(chalk.dim('The AI that powers the agent.\n'));
+  console.log('  1. ' + chalk.cyan('Anthropic') + chalk.dim(' (Claude models - Opus, Sonnet, Haiku)'));
+  console.log('  2. ' + chalk.green('OpenRouter') + chalk.dim(' (Access 100+ models - MiniMax, DeepSeek, etc.)\n'));
   
-  let anthropicKey = config.getAnthropicApiKey();
-  if (anthropicKey) {
-    console.log(chalk.dim(`Current: ${anthropicKey.slice(0, 10)}...`));
-    const newKey = await prompt('Enter new key (or press Enter to keep current): ', true);
-    if (newKey) {
-      anthropicKey = newKey;
+  const providerChoice = await prompt('Choose (1 or 2): ');
+  const useOpenRouter = providerChoice === '2';
+  
+  if (useOpenRouter) {
+    // OpenRouter setup
+    config.setProvider('openrouter');
+    console.log();
+    console.log(chalk.bold('OpenRouter API Key'));
+    console.log(chalk.dim('Get yours at https://openrouter.ai/keys\n'));
+    
+    let openrouterKey = config.getOpenRouterApiKey();
+    if (openrouterKey) {
+      console.log(chalk.dim(`Current: ${openrouterKey.slice(0, 10)}...`));
+      const newKey = await prompt('Enter new key (or press Enter to keep current): ', true);
+      if (newKey) {
+        openrouterKey = newKey;
+      }
+    } else {
+      openrouterKey = await prompt('Enter your OpenRouter API key: ', true);
     }
+
+    if (!openrouterKey) {
+      console.log(chalk.red('OpenRouter API key is required.'));
+      return false;
+    }
+
+    if (!openrouterKey.startsWith('sk-or-')) {
+      console.log(chalk.yellow('Warning: Key doesn\'t look like an OpenRouter key (should start with sk-or-)'));
+    }
+
+    config.setOpenRouterApiKey(openrouterKey);
+    console.log(chalk.green('✓ OpenRouter API key saved\n'));
   } else {
-    anthropicKey = await prompt('Enter your Anthropic API key: ', true);
-  }
+    // Anthropic setup
+    config.setProvider('anthropic');
+    console.log();
+    console.log(chalk.bold('Anthropic API Key'));
+    console.log(chalk.dim('Get yours at https://console.anthropic.com/\n'));
+    
+    let anthropicKey = config.getAnthropicApiKey();
+    if (anthropicKey) {
+      console.log(chalk.dim(`Current: ${anthropicKey.slice(0, 10)}...`));
+      const newKey = await prompt('Enter new key (or press Enter to keep current): ', true);
+      if (newKey) {
+        anthropicKey = newKey;
+      }
+    } else {
+      anthropicKey = await prompt('Enter your Anthropic API key: ', true);
+    }
 
-  if (!anthropicKey) {
-    console.log(chalk.red('Anthropic API key is required.'));
-    return false;
-  }
+    if (!anthropicKey) {
+      console.log(chalk.red('Anthropic API key is required.'));
+      return false;
+    }
 
-  if (!anthropicKey.startsWith('sk-ant-')) {
-    console.log(chalk.yellow('Warning: Key doesn\'t look like an Anthropic key (should start with sk-ant-)'));
-  }
+    if (!anthropicKey.startsWith('sk-ant-')) {
+      console.log(chalk.yellow('Warning: Key doesn\'t look like an Anthropic key (should start with sk-ant-)'));
+    }
 
-  config.setAnthropicApiKey(anthropicKey);
-  console.log(chalk.green('✓ Anthropic API key saved\n'));
+    config.setAnthropicApiKey(anthropicKey);
+    console.log(chalk.green('✓ Anthropic API key saved\n'));
+  }
 
   // Step 2: Quantish Trading API Key (Optional)
   console.log(chalk.bold('Step 2: Polymarket Trading (Optional)'));
@@ -295,9 +337,9 @@ export async function ensureConfigured(): Promise<boolean> {
   const config = getConfigManager();
   
   if (!config.isConfigured()) {
-    console.log(chalk.yellow('Quantish CLI is not configured yet.'));
-    console.log('Run ' + chalk.yellow('quantish init') + ' to set up.\n');
-    return false;
+    console.log(chalk.yellow('Quantish CLI is not configured yet.\n'));
+    // Automatically run setup wizard for first-time users
+    return await runSetup();
   }
   
   return true;

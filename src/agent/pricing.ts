@@ -25,15 +25,15 @@ export interface ModelConfig {
  * Available Claude models with pricing
  */
 export const MODELS: Record<string, ModelConfig> = {
-  'claude-opus-4-5-20251101': {
-    id: 'claude-opus-4-5-20251101',
+  'claude-opus-4-5-20250929': {
+    id: 'claude-opus-4-5-20250929',
     name: 'opus-4.5',
     displayName: 'Claude Opus 4.5',
     pricing: {
-      inputPerMTok: 15,
-      outputPerMTok: 75,
-      cacheWritePerMTok: 18.75,   // 1.25x input
-      cacheReadPerMTok: 1.50,   // 0.1x input
+      inputPerMTok: 5,
+      outputPerMTok: 25,
+      cacheWritePerMTok: 6.25,   // 1.25x input
+      cacheReadPerMTok: 0.50,   // 0.1x input
     },
     contextWindow: 200000,
     description: 'Most capable model. Best for complex reasoning and creative tasks.',
@@ -51,8 +51,8 @@ export const MODELS: Record<string, ModelConfig> = {
     contextWindow: 200000,
     description: 'Balanced performance and cost. Great for most coding and trading tasks.',
   },
-  'claude-haiku-4-5-20251001': {
-    id: 'claude-haiku-4-5-20251001',
+  'claude-haiku-4-5-20250929': {
+    id: 'claude-haiku-4-5-20250929',
     name: 'haiku-4.5',
     displayName: 'Claude Haiku 4.5',
     pricing: {
@@ -73,53 +73,86 @@ export const DEFAULT_MODEL = 'claude-sonnet-4-5-20250929';
  * Short aliases for quick model selection
  */
 export const MODEL_ALIASES: Record<string, string> = {
-  'opus': 'claude-opus-4-5-20251101',
-  'opus-4.5': 'claude-opus-4-5-20251101',
+  'opus': 'claude-opus-4-5-20250929',
+  'opus-4.5': 'claude-opus-4-5-20250929',
   'sonnet': 'claude-sonnet-4-5-20250929',
   'sonnet-4.5': 'claude-sonnet-4-5-20250929',
-  'haiku': 'claude-haiku-4-5-20251001',
-  'haiku-4.5': 'claude-haiku-4-5-20251001',
+  'haiku': 'claude-haiku-4-5-20250929',
+  'haiku-4.5': 'claude-haiku-4-5-20250929',
 };
 
 /**
- * Resolve a model alias or ID to the full model ID
+ * Resolve a model alias or ID to the full model ID (checks both Anthropic and OpenRouter)
  */
 export function resolveModelId(nameOrAlias: string): string | null {
   const lower = nameOrAlias.toLowerCase();
   
-  // Check if it's already a valid model ID
+  // Check if it's already a valid Anthropic model ID
   if (MODELS[lower]) {
     return lower;
   }
   
-  // Check aliases
+  // Check Anthropic aliases
   if (MODEL_ALIASES[lower]) {
     return MODEL_ALIASES[lower];
   }
   
-  // Check if it matches a model name
+  // Check if it matches an Anthropic model name
   for (const [id, config] of Object.entries(MODELS)) {
     if (config.name.toLowerCase() === lower) {
       return id;
     }
   }
   
+  // Check OpenRouter models
+  if (OPENROUTER_MODELS[lower]) {
+    return lower;
+  }
+  
+  // Check OpenRouter aliases
+  if (OPENROUTER_MODEL_ALIASES[lower]) {
+    return OPENROUTER_MODEL_ALIASES[lower];
+  }
+  
+  // Check if it matches an OpenRouter model name
+  for (const [id, config] of Object.entries(OPENROUTER_MODELS)) {
+    if (config.name.toLowerCase() === lower) {
+      return id;
+    }
+  }
+  
+  // For OpenRouter, also accept full model paths directly (e.g., "meta-llama/llama-3-70b")
+  if (nameOrAlias.includes('/')) {
+    return nameOrAlias;
+  }
+  
   return null;
 }
 
 /**
- * Get pricing for a model
+ * Get pricing for a model (checks both Anthropic and OpenRouter)
  */
 export function getModelPricing(modelId: string): ModelPricing | null {
-  const model = MODELS[modelId];
-  return model?.pricing ?? null;
+  // Check Anthropic models first
+  const anthropicModel = MODELS[modelId];
+  if (anthropicModel?.pricing) {
+    return anthropicModel.pricing;
+  }
+  
+  // Check OpenRouter models
+  const openrouterModel = OPENROUTER_MODELS[modelId];
+  if (openrouterModel?.pricing) {
+    return openrouterModel.pricing;
+  }
+  
+  return null;
 }
 
 /**
- * Get model config
+ * Get model config (checks both Anthropic and OpenRouter)
  */
 export function getModelConfig(modelId: string): ModelConfig | null {
-  return MODELS[modelId] ?? null;
+  return MODELS[modelId] ?? OPENROUTER_MODELS[modelId] ?? null;
 }
 
 /**
@@ -187,12 +220,20 @@ function calculateCostWithPricing(
 
 /**
  * Format cost for display
+ * Shows cents for small amounts, dollars for larger
  */
 export function formatCost(cost: number): string {
   if (cost < 0.01) {
-    return `$${(cost * 100).toFixed(3)}¢`;
+    // Show in cents (e.g., "0.15¢" for $0.0015)
+    const cents = cost * 100;
+    return `${cents.toFixed(3)}¢`;
   }
-  return `$${cost.toFixed(4)}`;
+  if (cost < 1) {
+    // Show in dollars with 4 decimals (e.g., "$0.0523")
+    return `$${cost.toFixed(4)}`;
+  }
+  // Show in dollars with 2 decimals (e.g., "$1.52")
+  return `$${cost.toFixed(2)}`;
 }
 
 /**
@@ -223,4 +264,144 @@ export function formatCostBreakdown(breakdown: CostBreakdown): string {
 export function listModels(): ModelConfig[] {
   return Object.values(MODELS);
 }
+
+/**
+ * OpenRouter Models Configuration
+ */
+export const OPENROUTER_MODELS: Record<string, ModelConfig> = {
+  'z-ai/glm-4.7': {
+    id: 'z-ai/glm-4.7',
+    name: 'glm-4.7',
+    displayName: 'GLM 4.7',
+    pricing: {
+      inputPerMTok: 0.40,
+      outputPerMTok: 1.50,
+      cacheWritePerMTok: 0,
+      cacheReadPerMTok: 0,
+    },
+    contextWindow: 202752,
+    description: 'Z.AI flagship. Enhanced programming, multi-step reasoning, agent tasks.',
+  },
+  'minimax/minimax-m2.1': {
+    id: 'minimax/minimax-m2.1',
+    name: 'minimax-m2.1',
+    displayName: 'MiniMax M2.1',
+    pricing: {
+      inputPerMTok: 0.30,
+      outputPerMTok: 1.20,
+      cacheWritePerMTok: 0,
+      cacheReadPerMTok: 0,
+    },
+    contextWindow: 204800,
+    description: 'Lightweight, optimized for coding and agentic workflows.',
+  },
+  'deepseek/deepseek-chat': {
+    id: 'deepseek/deepseek-chat',
+    name: 'deepseek-chat',
+    displayName: 'DeepSeek Chat',
+    pricing: {
+      inputPerMTok: 0.14,
+      outputPerMTok: 0.28,
+      cacheWritePerMTok: 0,
+      cacheReadPerMTok: 0,
+    },
+    contextWindow: 128000,
+    description: 'Ultra-cheap, strong coding and reasoning. Great for high-volume.',
+  },
+  'google/gemini-2.0-flash-001': {
+    id: 'google/gemini-2.0-flash-001',
+    name: 'gemini-2.0-flash',
+    displayName: 'Gemini 2.0 Flash',
+    pricing: {
+      inputPerMTok: 0.10,
+      outputPerMTok: 0.40,
+      cacheWritePerMTok: 0,
+      cacheReadPerMTok: 0,
+    },
+    contextWindow: 1000000,
+    description: 'Google\'s fast multimodal model. 1M context window.',
+  },
+  'qwen/qwen-2.5-coder-32b-instruct': {
+    id: 'qwen/qwen-2.5-coder-32b-instruct',
+    name: 'qwen-coder-32b',
+    displayName: 'Qwen 2.5 Coder 32B',
+    pricing: {
+      inputPerMTok: 0.18,
+      outputPerMTok: 0.18,
+      cacheWritePerMTok: 0,
+      cacheReadPerMTok: 0,
+    },
+    contextWindow: 32768,
+    description: 'Alibaba\'s coding specialist. Excellent for code generation.',
+  },
+};
+
+/**
+ * OpenRouter model aliases
+ */
+export const OPENROUTER_MODEL_ALIASES: Record<string, string> = {
+  'glm': 'z-ai/glm-4.7',
+  'glm-4.7': 'z-ai/glm-4.7',
+  'minimax': 'minimax/minimax-m2.1',
+  'deepseek': 'deepseek/deepseek-chat',
+  'gemini': 'google/gemini-2.0-flash-001',
+  'gemini-flash': 'google/gemini-2.0-flash-001',
+  'qwen': 'qwen/qwen-2.5-coder-32b-instruct',
+  'qwen-coder': 'qwen/qwen-2.5-coder-32b-instruct',
+};
+
+/**
+ * Resolve an OpenRouter model alias or ID
+ */
+export function resolveOpenRouterModelId(nameOrAlias: string): string | null {
+  const lower = nameOrAlias.toLowerCase();
+  
+  // Check if it's already a valid model ID
+  if (OPENROUTER_MODELS[lower]) {
+    return lower;
+  }
+  
+  // Check aliases
+  if (OPENROUTER_MODEL_ALIASES[lower]) {
+    return OPENROUTER_MODEL_ALIASES[lower];
+  }
+  
+  // Check if it matches a model name
+  for (const [id, config] of Object.entries(OPENROUTER_MODELS)) {
+    if (config.name.toLowerCase() === lower) {
+      return id;
+    }
+  }
+  
+  // For OpenRouter, also accept full model paths directly
+  if (nameOrAlias.includes('/')) {
+    return nameOrAlias;
+  }
+  
+  return null;
+}
+
+/**
+ * Get OpenRouter model config
+ */
+export function getOpenRouterModelConfig(modelId: string): ModelConfig | null {
+  return OPENROUTER_MODELS[modelId] ?? null;
+}
+
+/**
+ * Get OpenRouter model pricing
+ */
+export function getOpenRouterModelPricing(modelId: string): ModelPricing | null {
+  const model = OPENROUTER_MODELS[modelId];
+  return model?.pricing ?? null;
+}
+
+/**
+ * List all available OpenRouter models
+ */
+export function listOpenRouterModels(): ModelConfig[] {
+  return Object.values(OPENROUTER_MODELS);
+}
+
+
 

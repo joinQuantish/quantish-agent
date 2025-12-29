@@ -14,8 +14,13 @@ var DEFAULT_TRADING_MCP_URL = "https://quantish-sdk-production.up.railway.app/mc
 var DISCOVERY_MCP_URL = "https://quantish.live/mcp";
 var DISCOVERY_MCP_PUBLIC_KEY = "qm_ueQeqrmvZyHtR1zuVbLYkhx0fKyVAuV8";
 var DEFAULT_MCP_URL = DEFAULT_TRADING_MCP_URL;
+var DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-5-20250929";
+var DEFAULT_OPENROUTER_MODEL = "z-ai/glm-4.7";
 var schema = {
   anthropicApiKey: {
+    type: "string"
+  },
+  openrouterApiKey: {
     type: "string"
   },
   quantishApiKey: {
@@ -28,6 +33,10 @@ var schema = {
   model: {
     type: "string",
     default: "claude-sonnet-4-5-20250929"
+  },
+  provider: {
+    type: "string",
+    default: "anthropic"
   }
 };
 var ConfigManager = class {
@@ -55,6 +64,20 @@ var ConfigManager = class {
     this.conf.set("anthropicApiKey", key);
   }
   /**
+   * Get the OpenRouter API key
+   */
+  getOpenRouterApiKey() {
+    const envKey = process.env.OPENROUTER_API_KEY;
+    if (envKey) return envKey;
+    return this.conf.get("openrouterApiKey");
+  }
+  /**
+   * Set the OpenRouter API key
+   */
+  setOpenRouterApiKey(key) {
+    this.conf.set("openrouterApiKey", key);
+  }
+  /**
    * Get the Quantish API key
    */
   getQuantishApiKey() {
@@ -69,12 +92,21 @@ var ConfigManager = class {
     this.conf.set("quantishApiKey", key);
   }
   /**
+   * Get the current LLM provider
+   */
+  getProvider() {
+    return this.conf.get("provider") ?? "anthropic";
+  }
+  /**
+   * Set the LLM provider
+   */
+  setProvider(provider) {
+    this.conf.set("provider", provider);
+  }
+  /**
    * Get the Trading MCP server URL (user's wallet/orders)
-   * Priority: MCP_SERVER_URL env var > config file > default
    */
   getMcpServerUrl() {
-    const envUrl = process.env.MCP_SERVER_URL;
-    if (envUrl) return envUrl;
     return this.conf.get("mcpServerUrl") ?? DEFAULT_MCP_URL;
   }
   /**
@@ -102,16 +134,13 @@ var ConfigManager = class {
     this.conf.set("mcpServerUrl", url);
   }
   /**
-   * Generic setter for any config key
-   */
-  set(key, value) {
-    this.conf.set(key, value);
-  }
-  /**
-   * Get the model to use
+   * Get the model to use (returns default based on current provider)
    */
   getModel() {
-    return this.conf.get("model") ?? "claude-sonnet-4-5-20250929";
+    const model = this.conf.get("model");
+    if (model) return model;
+    const provider = this.getProvider();
+    return provider === "openrouter" ? DEFAULT_OPENROUTER_MODEL : DEFAULT_ANTHROPIC_MODEL;
   }
   /**
    * Set the model to use
@@ -120,12 +149,26 @@ var ConfigManager = class {
     this.conf.set("model", model);
   }
   /**
-   * Check if the CLI is configured (has at least Anthropic key)
+   * Check if the CLI is configured (has required LLM API key)
    * Discovery MCP works without any user key (embedded public key)
    * Trading MCP requires a user key
    */
   isConfigured() {
+    const provider = this.getProvider();
+    if (provider === "openrouter") {
+      return !!this.getOpenRouterApiKey();
+    }
     return !!this.getAnthropicApiKey();
+  }
+  /**
+   * Get the appropriate LLM API key based on current provider
+   */
+  getLLMApiKey() {
+    const provider = this.getProvider();
+    if (provider === "openrouter") {
+      return this.getOpenRouterApiKey();
+    }
+    return this.getAnthropicApiKey();
   }
   /**
    * Check if trading is enabled (has Quantish API key)
@@ -139,9 +182,11 @@ var ConfigManager = class {
   getAll() {
     return {
       anthropicApiKey: this.getAnthropicApiKey(),
+      openrouterApiKey: this.getOpenRouterApiKey(),
       quantishApiKey: this.getQuantishApiKey(),
       mcpServerUrl: this.getMcpServerUrl(),
-      model: this.getModel()
+      model: this.getModel(),
+      provider: this.getProvider()
     };
   }
   /**
@@ -527,27 +572,61 @@ async function runSetup() {
     return false;
   }
   console.log();
-  console.log(chalk.bold("Step 1: Anthropic API Key"));
-  console.log(chalk.dim("Powers the AI agent. Get yours at https://console.anthropic.com/"));
-  let anthropicKey = config.getAnthropicApiKey();
-  if (anthropicKey) {
-    console.log(chalk.dim(`Current: ${anthropicKey.slice(0, 10)}...`));
-    const newKey = await prompt("Enter new key (or press Enter to keep current): ", true);
-    if (newKey) {
-      anthropicKey = newKey;
+  console.log(chalk.bold("Step 1: Choose your LLM Provider"));
+  console.log(chalk.dim("The AI that powers the agent.\n"));
+  console.log("  1. " + chalk.cyan("Anthropic") + chalk.dim(" (Claude models - Opus, Sonnet, Haiku)"));
+  console.log("  2. " + chalk.green("OpenRouter") + chalk.dim(" (Access 100+ models - MiniMax, DeepSeek, etc.)\n"));
+  const providerChoice = await prompt("Choose (1 or 2): ");
+  const useOpenRouter = providerChoice === "2";
+  if (useOpenRouter) {
+    config.setProvider("openrouter");
+    console.log();
+    console.log(chalk.bold("OpenRouter API Key"));
+    console.log(chalk.dim("Get yours at https://openrouter.ai/keys\n"));
+    let openrouterKey = config.getOpenRouterApiKey();
+    if (openrouterKey) {
+      console.log(chalk.dim(`Current: ${openrouterKey.slice(0, 10)}...`));
+      const newKey = await prompt("Enter new key (or press Enter to keep current): ", true);
+      if (newKey) {
+        openrouterKey = newKey;
+      }
+    } else {
+      openrouterKey = await prompt("Enter your OpenRouter API key: ", true);
     }
+    if (!openrouterKey) {
+      console.log(chalk.red("OpenRouter API key is required."));
+      return false;
+    }
+    if (!openrouterKey.startsWith("sk-or-")) {
+      console.log(chalk.yellow("Warning: Key doesn't look like an OpenRouter key (should start with sk-or-)"));
+    }
+    config.setOpenRouterApiKey(openrouterKey);
+    console.log(chalk.green("\u2713 OpenRouter API key saved\n"));
   } else {
-    anthropicKey = await prompt("Enter your Anthropic API key: ", true);
+    config.setProvider("anthropic");
+    console.log();
+    console.log(chalk.bold("Anthropic API Key"));
+    console.log(chalk.dim("Get yours at https://console.anthropic.com/\n"));
+    let anthropicKey = config.getAnthropicApiKey();
+    if (anthropicKey) {
+      console.log(chalk.dim(`Current: ${anthropicKey.slice(0, 10)}...`));
+      const newKey = await prompt("Enter new key (or press Enter to keep current): ", true);
+      if (newKey) {
+        anthropicKey = newKey;
+      }
+    } else {
+      anthropicKey = await prompt("Enter your Anthropic API key: ", true);
+    }
+    if (!anthropicKey) {
+      console.log(chalk.red("Anthropic API key is required."));
+      return false;
+    }
+    if (!anthropicKey.startsWith("sk-ant-")) {
+      console.log(chalk.yellow("Warning: Key doesn't look like an Anthropic key (should start with sk-ant-)"));
+    }
+    config.setAnthropicApiKey(anthropicKey);
+    console.log(chalk.green("\u2713 Anthropic API key saved\n"));
   }
-  if (!anthropicKey) {
-    console.log(chalk.red("Anthropic API key is required."));
-    return false;
-  }
-  if (!anthropicKey.startsWith("sk-ant-")) {
-    console.log(chalk.yellow("Warning: Key doesn't look like an Anthropic key (should start with sk-ant-)"));
-  }
-  config.setAnthropicApiKey(anthropicKey);
-  console.log(chalk.green("\u2713 Anthropic API key saved\n"));
   console.log(chalk.bold("Step 2: Polymarket Trading (Optional)"));
   console.log(chalk.dim("Enable trading on Polymarket with your own managed wallet."));
   console.log(chalk.dim("Skip this if you only want to search/discover markets.\n"));
@@ -681,15 +760,14 @@ async function runSetup() {
 async function ensureConfigured() {
   const config = getConfigManager();
   if (!config.isConfigured()) {
-    console.log(chalk.yellow("Quantish CLI is not configured yet."));
-    console.log("Run " + chalk.yellow("quantish init") + " to set up.\n");
-    return false;
+    console.log(chalk.yellow("Quantish CLI is not configured yet.\n"));
+    return await runSetup();
   }
   return true;
 }
 
 // src/agent/loop.ts
-import Anthropic from "@anthropic-ai/sdk";
+import Anthropic2 from "@anthropic-ai/sdk";
 
 // src/tools/filesystem.ts
 import * as fs from "fs/promises";
@@ -778,41 +856,6 @@ async function fileExists(filePath) {
     return { success: true, data: { exists: false } };
   } catch (error2) {
     return { success: false, error: `Failed to check file: ${error2 instanceof Error ? error2.message : String(error2)}` };
-  }
-}
-async function editLines(filePath, startLine, endLine, newContent) {
-  try {
-    const resolvedPath = path.resolve(filePath);
-    if (!existsSync(resolvedPath)) {
-      return { success: false, error: `File not found: ${filePath}` };
-    }
-    const content = await fs.readFile(resolvedPath, "utf-8");
-    const lines = content.split("\n");
-    if (startLine < 1 || endLine < startLine || startLine > lines.length) {
-      return {
-        success: false,
-        error: `Invalid line range: ${startLine}-${endLine}. File has ${lines.length} lines.`
-      };
-    }
-    const startIdx = startLine - 1;
-    const endIdx = Math.min(endLine, lines.length);
-    const newLines = newContent.split("\n");
-    const beforeLines = lines.slice(0, startIdx);
-    const afterLines = lines.slice(endIdx);
-    const resultLines = [...beforeLines, ...newLines, ...afterLines];
-    const newFileContent = resultLines.join("\n");
-    await fs.writeFile(resolvedPath, newFileContent, "utf-8");
-    return {
-      success: true,
-      data: {
-        path: resolvedPath,
-        linesReplaced: endIdx - startIdx,
-        newLinesInserted: newLines.length,
-        totalLines: resultLines.length
-      }
-    };
-  } catch (error2) {
-    return { success: false, error: `Failed to edit lines: ${error2 instanceof Error ? error2.message : String(error2)}` };
   }
 }
 async function editFile(filePath, oldString, newString, options) {
@@ -933,34 +976,8 @@ var filesystemTools = [
     }
   },
   {
-    name: "edit_lines",
-    description: "Edit specific lines in a file by line number. MORE EFFICIENT than edit_file - use this when you know the line numbers from read_file. Only sends line numbers + new content, not full old content.",
-    input_schema: {
-      type: "object",
-      properties: {
-        path: {
-          type: "string",
-          description: "The path to the file to edit"
-        },
-        start_line: {
-          type: "number",
-          description: "The first line number to replace (1-based, inclusive)"
-        },
-        end_line: {
-          type: "number",
-          description: "The last line number to replace (1-based, inclusive)"
-        },
-        new_content: {
-          type: "string",
-          description: "The new content to insert (replaces lines start_line through end_line)"
-        }
-      },
-      required: ["path", "start_line", "end_line", "new_content"]
-    }
-  },
-  {
     name: "edit_file",
-    description: "Edit a file by replacing a specific string with new content. Use edit_lines instead when you know line numbers - it uses fewer tokens.",
+    description: "Edit a file by replacing a specific string with new content. Safer than write_file as it only modifies the targeted section. The old_string must match exactly (including whitespace).",
     input_schema: {
       type: "object",
       properties: {
@@ -983,111 +1000,8 @@ var filesystemTools = [
       },
       required: ["path", "old_string", "new_string"]
     }
-  },
-  {
-    name: "setup_env",
-    description: "Setup or update environment variables in a .env file for an application. Creates .env if it doesn't exist. Optionally creates a .env.example template. Use this when building any application that needs API keys or configuration.",
-    input_schema: {
-      type: "object",
-      properties: {
-        path: {
-          type: "string",
-          description: 'Path to the .env file (default: ".env" in current directory)'
-        },
-        variables: {
-          type: "object",
-          description: 'Object with environment variable names as keys and values. Example: { "QUANTISH_API_KEY": "abc123", "TOKEN_ID": "xyz" }',
-          additionalProperties: { type: "string" }
-        },
-        overwrite: {
-          type: "boolean",
-          description: "If true, overwrite existing variables. Default false (skip existing)."
-        },
-        create_example: {
-          type: "boolean",
-          description: "If true, also create a .env.example template file with placeholder values."
-        }
-      },
-      required: ["variables"]
-    }
   }
 ];
-async function setupEnv(envPath = ".env", variables, options) {
-  try {
-    const resolvedPath = path.resolve(envPath);
-    let content = "";
-    const existingVars = {};
-    if (existsSync(resolvedPath)) {
-      content = await fs.readFile(resolvedPath, "utf-8");
-      for (const line of content.split("\n")) {
-        const trimmed = line.trim();
-        if (trimmed && !trimmed.startsWith("#")) {
-          const eqIndex = trimmed.indexOf("=");
-          if (eqIndex > 0) {
-            const key = trimmed.slice(0, eqIndex);
-            const value = trimmed.slice(eqIndex + 1);
-            existingVars[key] = value;
-          }
-        }
-      }
-    }
-    const updatedVars = [];
-    const addedVars = [];
-    const skippedVars = [];
-    for (const [key, value] of Object.entries(variables)) {
-      if (existingVars[key] !== void 0) {
-        if (options?.overwrite) {
-          const regex = new RegExp(`^${key}=.*$`, "m");
-          content = content.replace(regex, `${key}=${value}`);
-          updatedVars.push(key);
-        } else {
-          skippedVars.push(key);
-        }
-      } else {
-        if (content && !content.endsWith("\n")) {
-          content += "\n";
-        }
-        content += `${key}=${value}
-`;
-        addedVars.push(key);
-      }
-    }
-    await fs.writeFile(resolvedPath, content, "utf-8");
-    if (options?.createExample) {
-      const examplePath = resolvedPath.replace(/\.env$/, ".env.example");
-      let exampleContent = "# Environment variables for this application\n";
-      exampleContent += "# Copy this file to .env and fill in your values\n\n";
-      for (const key of Object.keys({ ...existingVars, ...variables })) {
-        if (key === "QUANTISH_API_KEY") {
-          exampleContent += `# Get your API key at https://quantish.live
-`;
-          exampleContent += `${key}=your_api_key_here
-
-`;
-        } else {
-          exampleContent += `${key}=
-`;
-        }
-      }
-      await fs.writeFile(examplePath, exampleContent, "utf-8");
-    }
-    return {
-      success: true,
-      data: {
-        path: resolvedPath,
-        added: addedVars,
-        updated: updatedVars,
-        skipped: skippedVars,
-        exampleCreated: options?.createExample || false
-      }
-    };
-  } catch (error2) {
-    return {
-      success: false,
-      error: `Failed to setup env: ${error2 instanceof Error ? error2.message : String(error2)}`
-    };
-  }
-}
 async function executeFilesystemTool(name, args) {
   switch (name) {
     case "read_file":
@@ -1103,28 +1017,12 @@ async function executeFilesystemTool(name, args) {
       return deleteFile(args.path);
     case "file_exists":
       return fileExists(args.path);
-    case "edit_lines":
-      return editLines(
-        args.path,
-        args.start_line,
-        args.end_line,
-        args.new_content
-      );
     case "edit_file":
       return editFile(
         args.path,
         args.old_string,
         args.new_string,
         { replaceAll: args.replace_all }
-      );
-    case "setup_env":
-      return setupEnv(
-        args.path || ".env",
-        args.variables,
-        {
-          overwrite: args.overwrite,
-          createExample: args.create_example
-        }
       );
     default:
       return { success: false, error: `Unknown filesystem tool: ${name}` };
@@ -2315,126 +2213,18 @@ async function executeLocalTool(name, args) {
   return { success: false, error: `Unknown local tool: ${name}` };
 }
 
-// src/agent/compaction.ts
-var COMPACTION_PROMPT = `Your context window is filling up. Please create a concise summary of our conversation so far that will allow you to continue working effectively.
-
-The summary should be wrapped in <summary></summary> tags and include:
-
-# Task Overview
-- The user's core request and goals
-- Success criteria and constraints
-- Any specific preferences mentioned
-
-# Current State
-- What has been completed so far
-- Files created or modified (with paths)
-- Artifacts or outputs produced
-- Current working directory if relevant
-
-# Important Discoveries
-- Technical constraints or requirements found
-- Key decisions made and why
-- Errors encountered and how they were resolved
-- Approaches that didn't work (to avoid repeating)
-
-# Next Steps
-- Specific actions still needed
-- Priority order if multiple steps remain
-- Any blockers or dependencies
-
-# Context to Preserve
-- User preferences or style requirements
-- Domain-specific details that matter
-- Any commitments or promises made
-
-Be thorough but concise. The goal is to capture everything needed to continue seamlessly, while reducing token usage significantly.`;
-function parseCompactedSummary(response) {
-  const match = response.match(/<summary>([\s\S]*?)<\/summary>/);
-  if (match && match[1]) {
-    return match[1].trim();
-  }
-  return response.trim() || null;
-}
-async function createCompactedSummary(anthropic, history, model = "claude-sonnet-4-5-20250929", customPrompt) {
-  const prompt2 = customPrompt || COMPACTION_PROMPT;
-  const compactionMessages = [
-    ...history,
-    {
-      role: "user",
-      content: prompt2
-    }
-  ];
-  const response = await anthropic.messages.create({
-    model,
-    max_tokens: 4096,
-    messages: compactionMessages
-  });
-  const textBlocks = response.content.filter((block) => block.type === "text");
-  const fullText = textBlocks.map((block) => block.text).join("\n");
-  const summary = parseCompactedSummary(fullText);
-  if (!summary) {
-    throw new Error("Failed to parse compacted summary from response");
-  }
-  return summary;
-}
-function historyFromSummary(summary) {
-  return [
-    {
-      role: "assistant",
-      content: summary
-    }
-  ];
-}
-async function compactConversation(anthropic, history, model, systemPrompt, tools) {
-  let originalTokens = 0;
-  try {
-    const countResult = await anthropic.messages.countTokens({
-      model,
-      system: systemPrompt,
-      tools,
-      messages: history
-    });
-    originalTokens = countResult.input_tokens;
-  } catch (e) {
-    const contentLength = JSON.stringify(history).length;
-    originalTokens = Math.ceil(contentLength / 4);
-  }
-  const summaryModel = "claude-sonnet-4-5-20250929";
-  const summary = await createCompactedSummary(anthropic, history, summaryModel);
-  const newHistory = historyFromSummary(summary);
-  let newTokens = 0;
-  try {
-    const countResult = await anthropic.messages.countTokens({
-      model,
-      system: systemPrompt,
-      tools,
-      messages: newHistory
-    });
-    newTokens = countResult.input_tokens;
-  } catch (e) {
-    const contentLength = JSON.stringify(newHistory).length;
-    newTokens = Math.ceil(contentLength / 4);
-  }
-  return {
-    newHistory,
-    summary,
-    originalTokens,
-    newTokens
-  };
-}
-
 // src/agent/pricing.ts
 var MODELS = {
-  "claude-opus-4-5-20251101": {
-    id: "claude-opus-4-5-20251101",
+  "claude-opus-4-5-20250929": {
+    id: "claude-opus-4-5-20250929",
     name: "opus-4.5",
     displayName: "Claude Opus 4.5",
     pricing: {
-      inputPerMTok: 15,
-      outputPerMTok: 75,
-      cacheWritePerMTok: 18.75,
+      inputPerMTok: 5,
+      outputPerMTok: 25,
+      cacheWritePerMTok: 6.25,
       // 1.25x input
-      cacheReadPerMTok: 1.5
+      cacheReadPerMTok: 0.5
       // 0.1x input
     },
     contextWindow: 2e5,
@@ -2455,8 +2245,8 @@ var MODELS = {
     contextWindow: 2e5,
     description: "Balanced performance and cost. Great for most coding and trading tasks."
   },
-  "claude-haiku-4-5-20251001": {
-    id: "claude-haiku-4-5-20251001",
+  "claude-haiku-4-5-20250929": {
+    id: "claude-haiku-4-5-20250929",
     name: "haiku-4.5",
     displayName: "Claude Haiku 4.5",
     pricing: {
@@ -2473,12 +2263,12 @@ var MODELS = {
 };
 var DEFAULT_MODEL = "claude-sonnet-4-5-20250929";
 var MODEL_ALIASES = {
-  "opus": "claude-opus-4-5-20251101",
-  "opus-4.5": "claude-opus-4-5-20251101",
+  "opus": "claude-opus-4-5-20250929",
+  "opus-4.5": "claude-opus-4-5-20250929",
   "sonnet": "claude-sonnet-4-5-20250929",
   "sonnet-4.5": "claude-sonnet-4-5-20250929",
-  "haiku": "claude-haiku-4-5-20251001",
-  "haiku-4.5": "claude-haiku-4-5-20251001"
+  "haiku": "claude-haiku-4-5-20250929",
+  "haiku-4.5": "claude-haiku-4-5-20250929"
 };
 function resolveModelId(nameOrAlias) {
   const lower = nameOrAlias.toLowerCase();
@@ -2493,14 +2283,35 @@ function resolveModelId(nameOrAlias) {
       return id;
     }
   }
+  if (OPENROUTER_MODELS[lower]) {
+    return lower;
+  }
+  if (OPENROUTER_MODEL_ALIASES[lower]) {
+    return OPENROUTER_MODEL_ALIASES[lower];
+  }
+  for (const [id, config] of Object.entries(OPENROUTER_MODELS)) {
+    if (config.name.toLowerCase() === lower) {
+      return id;
+    }
+  }
+  if (nameOrAlias.includes("/")) {
+    return nameOrAlias;
+  }
   return null;
 }
 function getModelPricing(modelId) {
-  const model = MODELS[modelId];
-  return model?.pricing ?? null;
+  const anthropicModel = MODELS[modelId];
+  if (anthropicModel?.pricing) {
+    return anthropicModel.pricing;
+  }
+  const openrouterModel = OPENROUTER_MODELS[modelId];
+  if (openrouterModel?.pricing) {
+    return openrouterModel.pricing;
+  }
+  return null;
 }
 function getModelConfig(modelId) {
-  return MODELS[modelId] ?? null;
+  return MODELS[modelId] ?? OPENROUTER_MODELS[modelId] ?? null;
 }
 function calculateCost(modelId, inputTokens, outputTokens, cacheCreationTokens = 0, cacheReadTokens = 0) {
   const pricing = getModelPricing(modelId);
@@ -2537,12 +2348,921 @@ function calculateCostWithPricing(pricing, inputTokens, outputTokens, cacheCreat
 }
 function formatCost(cost) {
   if (cost < 0.01) {
-    return `$${(cost * 100).toFixed(3)}\xA2`;
+    const cents = cost * 100;
+    return `${cents.toFixed(3)}\xA2`;
   }
-  return `$${cost.toFixed(4)}`;
+  if (cost < 1) {
+    return `$${cost.toFixed(4)}`;
+  }
+  return `$${cost.toFixed(2)}`;
 }
 function listModels() {
   return Object.values(MODELS);
+}
+var OPENROUTER_MODELS = {
+  "z-ai/glm-4.7": {
+    id: "z-ai/glm-4.7",
+    name: "glm-4.7",
+    displayName: "GLM 4.7",
+    pricing: {
+      inputPerMTok: 0.4,
+      outputPerMTok: 1.5,
+      cacheWritePerMTok: 0,
+      cacheReadPerMTok: 0
+    },
+    contextWindow: 202752,
+    description: "Z.AI flagship. Enhanced programming, multi-step reasoning, agent tasks."
+  },
+  "minimax/minimax-m2.1": {
+    id: "minimax/minimax-m2.1",
+    name: "minimax-m2.1",
+    displayName: "MiniMax M2.1",
+    pricing: {
+      inputPerMTok: 0.3,
+      outputPerMTok: 1.2,
+      cacheWritePerMTok: 0,
+      cacheReadPerMTok: 0
+    },
+    contextWindow: 204800,
+    description: "Lightweight, optimized for coding and agentic workflows."
+  },
+  "deepseek/deepseek-chat": {
+    id: "deepseek/deepseek-chat",
+    name: "deepseek-chat",
+    displayName: "DeepSeek Chat",
+    pricing: {
+      inputPerMTok: 0.14,
+      outputPerMTok: 0.28,
+      cacheWritePerMTok: 0,
+      cacheReadPerMTok: 0
+    },
+    contextWindow: 128e3,
+    description: "Ultra-cheap, strong coding and reasoning. Great for high-volume."
+  },
+  "google/gemini-2.0-flash-001": {
+    id: "google/gemini-2.0-flash-001",
+    name: "gemini-2.0-flash",
+    displayName: "Gemini 2.0 Flash",
+    pricing: {
+      inputPerMTok: 0.1,
+      outputPerMTok: 0.4,
+      cacheWritePerMTok: 0,
+      cacheReadPerMTok: 0
+    },
+    contextWindow: 1e6,
+    description: "Google's fast multimodal model. 1M context window."
+  },
+  "qwen/qwen-2.5-coder-32b-instruct": {
+    id: "qwen/qwen-2.5-coder-32b-instruct",
+    name: "qwen-coder-32b",
+    displayName: "Qwen 2.5 Coder 32B",
+    pricing: {
+      inputPerMTok: 0.18,
+      outputPerMTok: 0.18,
+      cacheWritePerMTok: 0,
+      cacheReadPerMTok: 0
+    },
+    contextWindow: 32768,
+    description: "Alibaba's coding specialist. Excellent for code generation."
+  }
+};
+var OPENROUTER_MODEL_ALIASES = {
+  "glm": "z-ai/glm-4.7",
+  "glm-4.7": "z-ai/glm-4.7",
+  "minimax": "minimax/minimax-m2.1",
+  "deepseek": "deepseek/deepseek-chat",
+  "gemini": "google/gemini-2.0-flash-001",
+  "gemini-flash": "google/gemini-2.0-flash-001",
+  "qwen": "qwen/qwen-2.5-coder-32b-instruct",
+  "qwen-coder": "qwen/qwen-2.5-coder-32b-instruct"
+};
+
+// src/agent/provider.ts
+import Anthropic from "@anthropic-ai/sdk";
+
+// src/agent/openrouter.ts
+var OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+var OPENROUTER_MODELS2 = {
+  // Z.AI GLM models
+  "z-ai/glm-4.7": {
+    id: "z-ai/glm-4.7",
+    name: "glm-4.7",
+    displayName: "GLM 4.7",
+    provider: "Z.AI",
+    pricing: {
+      inputPerMTok: 0.4,
+      outputPerMTok: 1.5
+    },
+    contextWindow: 202752,
+    maxOutputTokens: 65536,
+    supportsTools: true,
+    supportsReasoning: true,
+    description: "Z.AI flagship. Enhanced programming, multi-step reasoning, agent tasks."
+  },
+  // MiniMax models - very cost effective
+  "minimax/minimax-m2.1": {
+    id: "minimax/minimax-m2.1",
+    name: "minimax-m2.1",
+    displayName: "MiniMax M2.1",
+    provider: "MiniMax",
+    pricing: {
+      inputPerMTok: 0.3,
+      // $0.0000003 * 1M
+      outputPerMTok: 1.2,
+      // $0.0000012 * 1M
+      cacheReadPerMTok: 0.03,
+      cacheWritePerMTok: 0.375
+    },
+    contextWindow: 204800,
+    maxOutputTokens: 131072,
+    supportsTools: true,
+    supportsReasoning: true,
+    description: "10B active params, state-of-the-art for coding and agentic workflows. Very cost efficient."
+  },
+  "minimax/minimax-m2": {
+    id: "minimax/minimax-m2",
+    name: "minimax-m2",
+    displayName: "MiniMax M2",
+    provider: "MiniMax",
+    pricing: {
+      inputPerMTok: 0.2,
+      outputPerMTok: 1,
+      cacheReadPerMTok: 0.03
+    },
+    contextWindow: 196608,
+    maxOutputTokens: 131072,
+    supportsTools: true,
+    supportsReasoning: true,
+    description: "Compact model optimized for end-to-end coding and agentic workflows."
+  },
+  // DeepSeek models - very cheap
+  "deepseek/deepseek-v3.2": {
+    id: "deepseek/deepseek-v3.2",
+    name: "deepseek-v3.2",
+    displayName: "DeepSeek V3.2",
+    provider: "DeepSeek",
+    pricing: {
+      inputPerMTok: 0.224,
+      outputPerMTok: 0.32
+    },
+    contextWindow: 163840,
+    supportsTools: true,
+    supportsReasoning: true,
+    description: "High efficiency with strong reasoning. GPT-5 class performance."
+  },
+  // Mistral models
+  "mistralai/devstral-2512": {
+    id: "mistralai/devstral-2512",
+    name: "devstral-2512",
+    displayName: "Devstral 2 2512",
+    provider: "Mistral",
+    pricing: {
+      inputPerMTok: 0.05,
+      outputPerMTok: 0.22
+    },
+    contextWindow: 262144,
+    supportsTools: true,
+    description: "State-of-the-art open model for agentic coding. 123B params."
+  },
+  "mistralai/mistral-large-2512": {
+    id: "mistralai/mistral-large-2512",
+    name: "mistral-large-2512",
+    displayName: "Mistral Large 3",
+    provider: "Mistral",
+    pricing: {
+      inputPerMTok: 0.5,
+      outputPerMTok: 1.5
+    },
+    contextWindow: 262144,
+    supportsTools: true,
+    description: "Most capable Mistral model. 675B total params (41B active)."
+  },
+  // Google Gemini
+  "google/gemini-3-flash-preview": {
+    id: "google/gemini-3-flash-preview",
+    name: "gemini-3-flash",
+    displayName: "Gemini 3 Flash Preview",
+    provider: "Google",
+    pricing: {
+      inputPerMTok: 0.5,
+      outputPerMTok: 3,
+      cacheReadPerMTok: 0.05
+    },
+    contextWindow: 1048576,
+    supportsTools: true,
+    supportsReasoning: true,
+    description: "High speed thinking model for agentic workflows. 1M context."
+  },
+  "google/gemini-3-pro-preview": {
+    id: "google/gemini-3-pro-preview",
+    name: "gemini-3-pro",
+    displayName: "Gemini 3 Pro Preview",
+    provider: "Google",
+    pricing: {
+      inputPerMTok: 2,
+      outputPerMTok: 12,
+      cacheReadPerMTok: 0.2,
+      cacheWritePerMTok: 2.375
+    },
+    contextWindow: 1048576,
+    supportsTools: true,
+    supportsReasoning: true,
+    description: "Flagship frontier model for high-precision multimodal reasoning."
+  },
+  // xAI Grok
+  "x-ai/grok-4.1-fast": {
+    id: "x-ai/grok-4.1-fast",
+    name: "grok-4.1-fast",
+    displayName: "Grok 4.1 Fast",
+    provider: "xAI",
+    pricing: {
+      inputPerMTok: 0.2,
+      outputPerMTok: 0.5,
+      cacheReadPerMTok: 0.05
+    },
+    contextWindow: 2e6,
+    maxOutputTokens: 3e4,
+    supportsTools: true,
+    supportsReasoning: true,
+    description: "Best agentic tool calling model. 2M context window."
+  },
+  // Anthropic via OpenRouter (for fallback/comparison)
+  "anthropic/claude-opus-4.5": {
+    id: "anthropic/claude-opus-4.5",
+    name: "claude-opus-4.5-or",
+    displayName: "Claude Opus 4.5 (OR)",
+    provider: "Anthropic",
+    pricing: {
+      inputPerMTok: 5,
+      outputPerMTok: 25,
+      cacheReadPerMTok: 0.5,
+      cacheWritePerMTok: 6.25
+    },
+    contextWindow: 2e5,
+    maxOutputTokens: 32e3,
+    supportsTools: true,
+    supportsReasoning: true,
+    description: "Anthropic Opus 4.5 via OpenRouter."
+  },
+  "anthropic/claude-haiku-4.5": {
+    id: "anthropic/claude-haiku-4.5",
+    name: "claude-haiku-4.5-or",
+    displayName: "Claude Haiku 4.5 (OR)",
+    provider: "Anthropic",
+    pricing: {
+      inputPerMTok: 1,
+      outputPerMTok: 5,
+      cacheReadPerMTok: 0.1,
+      cacheWritePerMTok: 1.25
+    },
+    contextWindow: 2e5,
+    maxOutputTokens: 64e3,
+    supportsTools: true,
+    supportsReasoning: true,
+    description: "Anthropic Haiku 4.5 via OpenRouter. Fast and efficient."
+  },
+  // Free models (for testing/experimentation)
+  "mistralai/devstral-2512:free": {
+    id: "mistralai/devstral-2512:free",
+    name: "devstral-free",
+    displayName: "Devstral 2 (Free)",
+    provider: "Mistral",
+    pricing: {
+      inputPerMTok: 0,
+      outputPerMTok: 0
+    },
+    contextWindow: 262144,
+    supportsTools: true,
+    description: "Free tier Devstral for testing. Limited capacity."
+  },
+  "xiaomi/mimo-v2-flash:free": {
+    id: "xiaomi/mimo-v2-flash:free",
+    name: "mimo-v2-flash-free",
+    displayName: "MiMo V2 Flash (Free)",
+    provider: "Xiaomi",
+    pricing: {
+      inputPerMTok: 0,
+      outputPerMTok: 0
+    },
+    contextWindow: 262144,
+    supportsTools: true,
+    supportsReasoning: true,
+    description: "Free MoE model. Top open-source on SWE-bench."
+  }
+};
+var OPENROUTER_ALIASES = {
+  // Z.AI GLM
+  "glm": "z-ai/glm-4.7",
+  "glm-4.7": "z-ai/glm-4.7",
+  // MiniMax
+  "minimax": "minimax/minimax-m2.1",
+  "m2": "minimax/minimax-m2",
+  "m2.1": "minimax/minimax-m2.1",
+  // DeepSeek  
+  "deepseek": "deepseek/deepseek-v3.2",
+  "ds": "deepseek/deepseek-v3.2",
+  // Mistral
+  "devstral": "mistralai/devstral-2512",
+  "mistral": "mistralai/mistral-large-2512",
+  "mistral-large": "mistralai/mistral-large-2512",
+  // Google
+  "gemini": "google/gemini-3-flash-preview",
+  "gemini-flash": "google/gemini-3-flash-preview",
+  "gemini-pro": "google/gemini-3-pro-preview",
+  // xAI
+  "grok": "x-ai/grok-4.1-fast",
+  // Anthropic via OR
+  "opus-or": "anthropic/claude-opus-4.5",
+  "haiku-or": "anthropic/claude-haiku-4.5",
+  // Free
+  "free": "mistralai/devstral-2512:free",
+  "mimo": "xiaomi/mimo-v2-flash:free"
+};
+function resolveOpenRouterModelId(nameOrAlias) {
+  const lower = nameOrAlias.toLowerCase();
+  if (OPENROUTER_MODELS2[lower]) {
+    return lower;
+  }
+  if (OPENROUTER_ALIASES[lower]) {
+    return OPENROUTER_ALIASES[lower];
+  }
+  for (const [id, config] of Object.entries(OPENROUTER_MODELS2)) {
+    if (config.name.toLowerCase() === lower) {
+      return id;
+    }
+  }
+  if (nameOrAlias.includes("/")) {
+    return nameOrAlias;
+  }
+  return null;
+}
+function getOpenRouterModelConfig(modelId) {
+  return OPENROUTER_MODELS2[modelId] ?? null;
+}
+function convertToOpenAITools(anthropicTools) {
+  return anthropicTools.map((tool) => ({
+    type: "function",
+    function: {
+      name: tool.name,
+      description: tool.description ?? "",
+      parameters: tool.input_schema
+    }
+  }));
+}
+var OpenRouterClient = class {
+  apiKey;
+  baseUrl;
+  appName;
+  appUrl;
+  constructor(config) {
+    this.apiKey = config.apiKey;
+    this.baseUrl = config.baseUrl ?? OPENROUTER_BASE_URL;
+    this.appName = config.appName ?? "Quantish Agent";
+    this.appUrl = config.appUrl ?? "https://quantish.ai";
+  }
+  /**
+   * Create a chat completion (non-streaming)
+   */
+  async createChatCompletion(options) {
+    const response = await fetch(`${this.baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${this.apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": this.appUrl,
+        "X-Title": this.appName
+      },
+      body: JSON.stringify({
+        model: options.model,
+        messages: options.messages,
+        tools: options.tools,
+        tool_choice: options.tool_choice ?? (options.tools ? "auto" : void 0),
+        max_tokens: options.max_tokens,
+        temperature: options.temperature,
+        top_p: options.top_p,
+        stream: false
+      })
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OpenRouter API error (${response.status}): ${errorText}`);
+    }
+    return response.json();
+  }
+  /**
+   * Create a streaming chat completion
+   */
+  async *createStreamingChatCompletion(options) {
+    const response = await fetch(`${this.baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${this.apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": this.appUrl,
+        "X-Title": this.appName
+      },
+      body: JSON.stringify({
+        model: options.model,
+        messages: options.messages,
+        tools: options.tools,
+        tool_choice: options.tool_choice ?? (options.tools ? "auto" : void 0),
+        max_tokens: options.max_tokens,
+        temperature: options.temperature,
+        top_p: options.top_p,
+        stream: true
+      })
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OpenRouter API error (${response.status}): ${errorText}`);
+    }
+    if (!response.body) {
+      throw new Error("No response body for streaming request");
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed === "data: [DONE]") continue;
+          if (!trimmed.startsWith("data: ")) continue;
+          try {
+            const json = JSON.parse(trimmed.slice(6));
+            yield json;
+          } catch {
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+  /**
+   * Get generation details including exact cost
+   */
+  async getGenerationDetails(generationId) {
+    const response = await fetch(`${this.baseUrl}/generation?id=${generationId}`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${this.apiKey}`
+      }
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OpenRouter API error (${response.status}): ${errorText}`);
+    }
+    return response.json();
+  }
+  /**
+   * List available models
+   */
+  async listModels() {
+    const response = await fetch(`${this.baseUrl}/models`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${this.apiKey}`
+      }
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OpenRouter API error (${response.status}): ${errorText}`);
+    }
+    return response.json();
+  }
+};
+function calculateOpenRouterCost(modelId, inputTokens, outputTokens, cacheReadTokens = 0, cacheWriteTokens = 0) {
+  let config = getOpenRouterModelConfig(modelId);
+  if (!config) {
+    config = getOpenRouterModelConfig(modelId.toLowerCase());
+  }
+  if (!config) {
+    const lower = modelId.toLowerCase();
+    for (const [key, model] of Object.entries(OPENROUTER_MODELS2)) {
+      if (key.toLowerCase() === lower || model.name.toLowerCase() === lower) {
+        config = model;
+        break;
+      }
+    }
+    if (!config && OPENROUTER_ALIASES[lower]) {
+      config = OPENROUTER_MODELS2[OPENROUTER_ALIASES[lower]];
+    }
+  }
+  const pricing = config?.pricing ?? {
+    inputPerMTok: 0.4,
+    // GLM 4.7 pricing as fallback
+    outputPerMTok: 1.5,
+    cacheReadPerMTok: 0,
+    cacheWritePerMTok: 0
+  };
+  const inputCost = inputTokens / 1e6 * pricing.inputPerMTok;
+  const outputCost = outputTokens / 1e6 * pricing.outputPerMTok;
+  const cacheReadCost = cacheReadTokens / 1e6 * (pricing.cacheReadPerMTok ?? 0);
+  const cacheWriteCost = cacheWriteTokens / 1e6 * (pricing.cacheWritePerMTok ?? 0);
+  return {
+    inputCost,
+    outputCost,
+    cacheReadCost,
+    cacheWriteCost,
+    totalCost: inputCost + outputCost + cacheReadCost + cacheWriteCost
+  };
+}
+function listOpenRouterModels() {
+  return Object.values(OPENROUTER_MODELS2);
+}
+
+// src/agent/provider.ts
+var AnthropicProvider = class {
+  client;
+  config;
+  constructor(config) {
+    this.config = config;
+    const headers = {};
+    if (config.contextEditing && config.contextEditing.length > 0) {
+      headers["anthropic-beta"] = "context-management-2025-06-27";
+    }
+    this.client = new Anthropic({
+      apiKey: config.apiKey,
+      defaultHeaders: Object.keys(headers).length > 0 ? headers : void 0
+    });
+  }
+  getModel() {
+    return this.config.model;
+  }
+  async countTokens(messages) {
+    try {
+      const response = await this.client.messages.countTokens({
+        model: this.config.model,
+        system: this.config.systemPrompt,
+        tools: this.config.tools,
+        messages
+      });
+      return response.input_tokens;
+    } catch {
+      return 0;
+    }
+  }
+  async chat(messages) {
+    const systemWithCache = [
+      {
+        type: "text",
+        text: this.config.systemPrompt,
+        cache_control: { type: "ephemeral" }
+      }
+    ];
+    const response = await this.client.messages.create({
+      model: this.config.model,
+      max_tokens: this.config.maxTokens,
+      system: systemWithCache,
+      tools: this.config.tools,
+      messages
+    });
+    const usage = response.usage;
+    const cost = calculateCost(
+      this.config.model,
+      usage.input_tokens,
+      usage.output_tokens,
+      usage.cache_creation_input_tokens ?? 0,
+      usage.cache_read_input_tokens ?? 0
+    );
+    const textBlocks = response.content.filter(
+      (block) => block.type === "text"
+    );
+    const toolUses = response.content.filter(
+      (block) => block.type === "tool_use"
+    );
+    return {
+      text: textBlocks.map((b) => b.text).join(""),
+      toolCalls: toolUses.map((t) => ({
+        id: t.id,
+        name: t.name,
+        input: t.input
+      })),
+      usage: {
+        inputTokens: usage.input_tokens,
+        outputTokens: usage.output_tokens,
+        cacheCreationTokens: usage.cache_creation_input_tokens ?? 0,
+        cacheReadTokens: usage.cache_read_input_tokens ?? 0
+      },
+      cost,
+      stopReason: response.stop_reason === "tool_use" ? "tool_use" : "end_turn",
+      rawResponse: response
+    };
+  }
+  async streamChat(messages, callbacks) {
+    const systemWithCache = [
+      {
+        type: "text",
+        text: this.config.systemPrompt,
+        cache_control: { type: "ephemeral" }
+      }
+    ];
+    const stream = this.client.messages.stream({
+      model: this.config.model,
+      max_tokens: this.config.maxTokens,
+      system: systemWithCache,
+      tools: this.config.tools,
+      messages
+    });
+    let fullText = "";
+    for await (const event of stream) {
+      if (event.type === "content_block_delta") {
+        const delta = event.delta;
+        if (delta.type === "text_delta" && delta.text) {
+          fullText += delta.text;
+          callbacks.onText?.(delta.text);
+        } else if (delta.type === "thinking_delta" && delta.thinking) {
+          callbacks.onThinking?.(delta.thinking);
+        }
+      }
+    }
+    const response = await stream.finalMessage();
+    const usage = response.usage;
+    const cost = calculateCost(
+      this.config.model,
+      usage.input_tokens,
+      usage.output_tokens,
+      usage.cache_creation_input_tokens ?? 0,
+      usage.cache_read_input_tokens ?? 0
+    );
+    const toolUses = response.content.filter(
+      (block) => block.type === "tool_use"
+    );
+    for (const tool of toolUses) {
+      callbacks.onToolCall?.(tool.id, tool.name, tool.input);
+    }
+    return {
+      text: fullText,
+      toolCalls: toolUses.map((t) => ({
+        id: t.id,
+        name: t.name,
+        input: t.input
+      })),
+      usage: {
+        inputTokens: usage.input_tokens,
+        outputTokens: usage.output_tokens,
+        cacheCreationTokens: usage.cache_creation_input_tokens ?? 0,
+        cacheReadTokens: usage.cache_read_input_tokens ?? 0
+      },
+      cost,
+      stopReason: response.stop_reason === "tool_use" ? "tool_use" : "end_turn",
+      rawResponse: response
+    };
+  }
+};
+var OpenRouterProvider = class {
+  client;
+  config;
+  openaiTools;
+  constructor(config) {
+    this.config = config;
+    this.client = new OpenRouterClient({
+      apiKey: config.apiKey
+    });
+    this.openaiTools = convertToOpenAITools(config.tools);
+  }
+  getModel() {
+    return this.config.model;
+  }
+  async countTokens(_messages) {
+    const text = JSON.stringify(_messages);
+    return Math.ceil(text.length / 4);
+  }
+  /**
+   * Convert Anthropic message format to OpenAI format
+   */
+  convertMessages(messages) {
+    const result = [];
+    result.push({
+      role: "system",
+      content: this.config.systemPrompt
+    });
+    for (const msg of messages) {
+      if (msg.role === "user") {
+        if (typeof msg.content === "string") {
+          result.push({ role: "user", content: msg.content });
+        } else if (Array.isArray(msg.content)) {
+          const toolResults = msg.content.filter(
+            (block) => block.type === "tool_result"
+          );
+          if (toolResults.length > 0) {
+            for (const tr of toolResults) {
+              const toolResult = tr;
+              result.push({
+                role: "tool",
+                tool_call_id: toolResult.tool_use_id,
+                content: typeof toolResult.content === "string" ? toolResult.content : JSON.stringify(toolResult.content)
+              });
+            }
+          } else {
+            const textContent = msg.content.filter((block) => block.type === "text").map((block) => block.text).join("");
+            if (textContent) {
+              result.push({ role: "user", content: textContent });
+            }
+          }
+        }
+      } else if (msg.role === "assistant") {
+        if (typeof msg.content === "string") {
+          result.push({ role: "assistant", content: msg.content });
+        } else if (Array.isArray(msg.content)) {
+          const textBlocks = msg.content.filter(
+            (block) => block.type === "text"
+          );
+          const toolUses = msg.content.filter(
+            (block) => block.type === "tool_use"
+          );
+          const textContent = textBlocks.map((b) => b.text).join("");
+          if (toolUses.length > 0) {
+            result.push({
+              role: "assistant",
+              content: textContent || null,
+              tool_calls: toolUses.map((t) => ({
+                id: t.id,
+                type: "function",
+                function: {
+                  name: t.name,
+                  arguments: JSON.stringify(t.input)
+                }
+              }))
+            });
+          } else {
+            result.push({ role: "assistant", content: textContent });
+          }
+        }
+      }
+    }
+    return result;
+  }
+  async chat(messages) {
+    const openaiMessages = this.convertMessages(messages);
+    const response = await this.client.createChatCompletion({
+      model: this.config.model,
+      messages: openaiMessages,
+      tools: this.openaiTools.length > 0 ? this.openaiTools : void 0,
+      max_tokens: this.config.maxTokens
+    });
+    const choice = response.choices[0];
+    const usage = response.usage ?? { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+    const cost = calculateOpenRouterCost(
+      this.config.model,
+      usage.prompt_tokens,
+      usage.completion_tokens
+    );
+    const toolCalls = choice.message.tool_calls ?? [];
+    return {
+      text: choice.message.content ?? "",
+      toolCalls: toolCalls.map((tc) => ({
+        id: tc.id,
+        name: tc.function.name,
+        input: JSON.parse(tc.function.arguments)
+      })),
+      usage: {
+        inputTokens: usage.prompt_tokens,
+        outputTokens: usage.completion_tokens,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0
+      },
+      cost,
+      stopReason: choice.finish_reason === "tool_calls" ? "tool_use" : "end_turn",
+      rawResponse: response
+    };
+  }
+  async streamChat(messages, callbacks) {
+    const openaiMessages = this.convertMessages(messages);
+    let fullText = "";
+    const toolCallsInProgress = /* @__PURE__ */ new Map();
+    let finishReason = null;
+    let usage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+    const stream = this.client.createStreamingChatCompletion({
+      model: this.config.model,
+      messages: openaiMessages,
+      tools: this.openaiTools.length > 0 ? this.openaiTools : void 0,
+      max_tokens: this.config.maxTokens
+    });
+    for await (const chunk of stream) {
+      const choice = chunk.choices[0];
+      if (!choice) continue;
+      if (choice.delta.content) {
+        fullText += choice.delta.content;
+        callbacks.onText?.(choice.delta.content);
+      }
+      if (choice.delta.tool_calls) {
+        for (const tcDelta of choice.delta.tool_calls) {
+          const existing = toolCallsInProgress.get(tcDelta.index);
+          if (!existing) {
+            toolCallsInProgress.set(tcDelta.index, {
+              id: tcDelta.id ?? "",
+              name: tcDelta.function?.name ?? "",
+              arguments: tcDelta.function?.arguments ?? ""
+            });
+          } else {
+            if (tcDelta.id) existing.id = tcDelta.id;
+            if (tcDelta.function?.name) existing.name = tcDelta.function.name;
+            if (tcDelta.function?.arguments) existing.arguments += tcDelta.function.arguments;
+          }
+        }
+      }
+      if (choice.finish_reason) {
+        finishReason = choice.finish_reason;
+      }
+      if (chunk.usage) {
+        usage = chunk.usage;
+      }
+    }
+    const toolCalls = [];
+    for (const [, tc] of toolCallsInProgress) {
+      try {
+        if (!tc || !tc.name) {
+          continue;
+        }
+        let toolName = tc.name;
+        if (toolName.includes("<")) {
+          toolName = toolName.split("<")[0];
+        }
+        if (toolName.includes("(")) {
+          toolName = toolName.split("(")[0];
+        }
+        toolName = toolName.trim();
+        let args = tc.arguments?.trim() || "{}";
+        if (args.includes("<arg_key>") || args.includes("</arg_key>")) {
+          args = args.replace(/<\/?arg_key>/g, "");
+          if (!args.startsWith("{")) {
+            const keyValuePairs = [];
+            const kvMatches = args.matchAll(/(\w+):\s*(?:"([^"]+)"|(\d+)|(\w+))/g);
+            for (const match of kvMatches) {
+              const key = match[1];
+              const value = match[2] ?? match[3] ?? match[4];
+              if (match[3]) {
+                keyValuePairs.push(`"${key}": ${value}`);
+              } else {
+                keyValuePairs.push(`"${key}": "${value}"`);
+              }
+            }
+            if (keyValuePairs.length > 0) {
+              args = `{${keyValuePairs.join(", ")}}`;
+            }
+          }
+        }
+        if (args && !args.endsWith("}") && !args.endsWith("]")) {
+          const openBraces = (args.match(/{/g) || []).length;
+          const closeBraces = (args.match(/}/g) || []).length;
+          if (openBraces > closeBraces) {
+            args = args + "}".repeat(openBraces - closeBraces);
+          }
+        }
+        if (!args || args === "" || args === "undefined") {
+          args = "{}";
+        }
+        const input = JSON.parse(args);
+        const toolId = tc.id || `tool_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        toolCalls.push({ id: toolId, name: toolName, input });
+        callbacks.onToolCall?.(toolId, toolName, input);
+      } catch (e) {
+        const cleanToolName = tc?.name?.split("<")[0]?.split("(")[0]?.trim() || "unknown_tool";
+        let parsedInput = {};
+        try {
+          const argsStr = tc?.arguments || "";
+          const matches = argsStr.matchAll(/(\w+):\s*"([^"]+)"/g);
+          for (const match of matches) {
+            parsedInput[match[1]] = match[2];
+          }
+        } catch {
+        }
+        const toolId = tc?.id || `tool_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        toolCalls.push({ id: toolId, name: cleanToolName, input: parsedInput });
+        callbacks.onToolCall?.(toolId, cleanToolName, parsedInput);
+      }
+    }
+    const cost = calculateOpenRouterCost(
+      this.config.model,
+      usage.prompt_tokens,
+      usage.completion_tokens
+    );
+    return {
+      text: fullText,
+      toolCalls,
+      usage: {
+        inputTokens: usage.prompt_tokens,
+        outputTokens: usage.completion_tokens,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0
+      },
+      cost,
+      stopReason: finishReason === "tool_calls" ? "tool_use" : "end_turn"
+    };
+  }
+};
+function createLLMProvider(config) {
+  if (config.provider === "openrouter") {
+    return new OpenRouterProvider(config);
+  }
+  return new AnthropicProvider(config);
 }
 
 // src/agent/loop.ts
@@ -2729,82 +3449,45 @@ function extractTokenInfo(token) {
     price: token.price ?? token.probability
   };
 }
-var DEFAULT_SYSTEM_PROMPT = `You are Quantish, an AI coding and trading agent. Be concise.
+var DEFAULT_SYSTEM_PROMPT = `You are Quantish, an AI coding and trading agent.
 
-## APIs
+## Trading Tools (via MCP)
+- Check wallet balances and positions
+- Place, cancel, and manage orders  
+- Get market prices and orderbook data
+- Search markets on Polymarket, Kalshi, Limitless
 
-TRADING (requires QUANTISH_API_KEY):
-- URL: https://quantish-sdk-production.up.railway.app/mcp/execute
-- Format: JSON-RPC 2.0 { jsonrpc: '2.0', method: 'tools/call', params: { name, arguments }, id }
-- Tools: get_balances, get_positions, place_order, cancel_order, get_orders, get_orderbook, get_price
+## Coding Tools (local)
+- read_file, write_file, edit_file, list_dir
+- grep (search), find_files
+- run_command (blocking), start_background_process (non-blocking)
+- git operations
 
-DISCOVERY (free):
-- URL: https://quantish.live/mcp/execute
-- Format: { name, arguments }
-- Key: qm_ueQeqrmvZyHtR1zuVbLYkhx0fKyVAuV8
-- Tools: search_markets, get_market_details, get_trending_markets
+## IMPORTANT: Background vs Blocking Commands
 
-## Response Structures (IMPORTANT - use these field paths)
+Use \`start_background_process\` for:
+- Dev servers: npm start, npm run dev, yarn dev, vite, next dev
+- Watch mode: npm run watch, tsc --watch
+- Any server or long-running process
+- Returns immediately with a process ID
 
-search_markets / get_trending_markets returns:
-{
-  "found": N,
-  "markets": [{ "platform", "id", "title", "markets": [{ "marketId", "question", "outcomes": [{ "name", "price" }], "clobTokenIds": "[json_array]", "conditionId" }] }]
-}
+Use \`run_command\` for:
+- Quick commands: ls, cat, npm install, npm run build
+- One-time operations that complete quickly
+- Blocks until command finishes
 
-get_market_details returns:
-{
-  "platform": "polymarket",
-  "id": "12345",
-  "conditionId": "0x...",
-  "title": "Market Title",
-  "clobTokenIds": "["TOKEN_YES","TOKEN_NO"]",
-  "markets": [{
-    "marketId": "67890",
-    "question": "Question?",
-    "outcomes": [{ "name": "Yes", "price": 0.55 }, { "name": "No", "price": 0.45 }],
-    "clobTokenIds": "["TOKEN_YES","TOKEN_NO"]"
-  }]
-}
+After starting a background process:
+1. Use \`get_process_output(process_id)\` to check if it started correctly
+2. Use \`list_processes()\` to see all running processes
+3. Use \`stop_process(process_id)\` to stop when done
 
-KEY FIELDS:
-- market.id = top-level ID for get_market_details
-- market.markets[0].marketId = sub-market ID
-- market.markets[0].outcomes[].name = "Yes"/"No" or outcome name
-- market.markets[0].outcomes[].price = decimal 0-1
-- JSON.parse(market.clobTokenIds || market.markets[0].clobTokenIds) = token IDs array
-- market.conditionId = condition ID for trading
-
-## Standalone App Code
-
-Trading helper:
-async function callTradingTool(name, args = {}) {
-  const res = await fetch('https://quantish-sdk-production.up.railway.app/mcp/execute', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.QUANTISH_API_KEY },
-    body: JSON.stringify({ jsonrpc: '2.0', method: 'tools/call', params: { name, arguments: args }, id: Date.now() })
-  });
-  return JSON.parse((await res.json()).result.content[0].text);
-}
-
-Discovery helper:
-async function callDiscoveryTool(name, args = {}) {
-  const res = await fetch('https://quantish.live/mcp/execute', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-API-Key': 'qm_ueQeqrmvZyHtR1zuVbLYkhx0fKyVAuV8' },
-    body: JSON.stringify({ name, arguments: args })
-  });
-  return JSON.parse((await res.json()).result.content[0].text);
-}
-
-## Rules
-1. Never use @modelcontextprotocol/sdk - use fetch()
-2. Always create .env.example and use dotenv
-3. Never hardcode/mock data - always fetch real data
-4. Check logs before restarting servers
-5. PREFER edit_lines over edit_file - uses line numbers, saves tokens`;
+## Guidelines
+- Be concise
+- Prices on Polymarket are 0.01-0.99 (probabilities)
+- For dangerous operations (rm, sudo), explain first`;
 var Agent = class {
   anthropic;
+  llmProvider;
   mcpClient;
   mcpClientManager;
   config;
@@ -2825,6 +3508,8 @@ var Agent = class {
     this.config = {
       enableLocalTools: true,
       enableMCPTools: true,
+      provider: "anthropic",
+      // Default to Anthropic
       // Default context editing: clear old tool uses when context exceeds 100k tokens
       contextEditing: config.contextEditing || [
         {
@@ -2839,13 +3524,175 @@ var Agent = class {
     if (this.config.contextEditing && this.config.contextEditing.length > 0) {
       headers["anthropic-beta"] = "context-management-2025-06-27";
     }
-    this.anthropic = new Anthropic({
-      apiKey: config.anthropicApiKey,
+    const anthropicKey = config.anthropicApiKey || "placeholder";
+    this.anthropic = new Anthropic2({
+      apiKey: anthropicKey,
       defaultHeaders: Object.keys(headers).length > 0 ? headers : void 0
     });
     this.mcpClient = config.mcpClient;
     this.mcpClientManager = config.mcpClientManager;
     this.workingDirectory = config.workingDirectory || process.cwd();
+  }
+  /**
+   * Get the API key for the current provider
+   */
+  getApiKey() {
+    if (this.config.provider === "openrouter") {
+      return this.config.openrouterApiKey || "";
+    }
+    return this.config.anthropicApiKey || "";
+  }
+  /**
+   * Check if using OpenRouter provider
+   */
+  isOpenRouter() {
+    return this.config.provider === "openrouter";
+  }
+  /**
+   * Get the current provider name
+   */
+  getProvider() {
+    return this.config.provider || "anthropic";
+  }
+  /**
+   * Set the LLM provider
+   */
+  setProvider(provider) {
+    this.config.provider = provider;
+    this.llmProvider = void 0;
+  }
+  /**
+   * Get or create the LLM provider instance
+   */
+  async getOrCreateProvider() {
+    if (this.llmProvider) {
+      return this.llmProvider;
+    }
+    const allTools = await this.getAllTools();
+    const systemPrompt = this.config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
+    const model = this.config.model ?? DEFAULT_MODEL;
+    const maxTokens = this.config.maxTokens ?? 8192;
+    this.llmProvider = createLLMProvider({
+      provider: this.config.provider || "anthropic",
+      apiKey: this.getApiKey(),
+      model,
+      maxTokens,
+      systemPrompt,
+      tools: allTools,
+      contextEditing: this.config.contextEditing
+    });
+    return this.llmProvider;
+  }
+  /**
+   * Run the agent using the provider abstraction (for OpenRouter and future providers)
+   */
+  async runWithProvider(userMessage) {
+    const maxIterations = this.config.maxIterations ?? 200;
+    const useStreaming = this.config.streaming ?? true;
+    const provider = await this.getOrCreateProvider();
+    const contextMessage = `[Working directory: ${this.workingDirectory}]
+
+${userMessage}`;
+    this.conversationHistory.push({
+      role: "user",
+      content: contextMessage
+    });
+    const toolCalls = [];
+    let iterations = 0;
+    let finalText = "";
+    while (iterations < maxIterations) {
+      iterations++;
+      this.config.onStreamStart?.();
+      let response;
+      if (useStreaming) {
+        response = await provider.streamChat(this.conversationHistory, {
+          onText: (text) => {
+            finalText += text;
+            this.config.onText?.(text, false);
+          },
+          onThinking: (text) => {
+            this.config.onThinking?.(text);
+          },
+          onToolCall: (id, name, input) => {
+            this.config.onToolCall?.(name, input);
+          }
+        });
+        if (response.text) {
+          this.config.onText?.("", true);
+        }
+      } else {
+        response = await provider.chat(this.conversationHistory);
+        if (response.text) {
+          finalText += response.text;
+          this.config.onText?.(response.text, true);
+        }
+      }
+      this.config.onStreamEnd?.();
+      this.updateTokenUsage({
+        input_tokens: response.usage.inputTokens,
+        output_tokens: response.usage.outputTokens,
+        cache_creation_input_tokens: response.usage.cacheCreationTokens,
+        cache_read_input_tokens: response.usage.cacheReadTokens
+      }, response.cost);
+      const responseContent = [];
+      if (response.text) {
+        responseContent.push({ type: "text", text: response.text });
+      }
+      for (const tc of response.toolCalls) {
+        responseContent.push({
+          type: "tool_use",
+          id: tc.id,
+          name: tc.name,
+          input: tc.input
+        });
+      }
+      if (response.toolCalls.length === 0) {
+        this.conversationHistory.push({
+          role: "assistant",
+          content: responseContent
+        });
+        break;
+      }
+      const toolResults = [];
+      for (const toolCall2 of response.toolCalls) {
+        await new Promise((resolve2) => setImmediate(resolve2));
+        const { result, source } = await this.executeTool(
+          toolCall2.name,
+          toolCall2.input
+        );
+        const success2 = !(result && typeof result === "object" && "error" in result);
+        this.config.onToolResult?.(toolCall2.name, result, success2);
+        toolCalls.push({
+          name: toolCall2.name,
+          input: toolCall2.input,
+          result,
+          source
+        });
+        toolResults.push({
+          type: "tool_result",
+          tool_use_id: toolCall2.id,
+          content: JSON.stringify(result)
+        });
+      }
+      this.conversationHistory.push({
+        role: "assistant",
+        content: responseContent
+      });
+      this.conversationHistory.push({
+        role: "user",
+        content: toolResults
+      });
+      this.truncateLastToolResults();
+      if (response.stopReason === "end_turn" && response.toolCalls.length === 0) {
+        break;
+      }
+    }
+    return {
+      text: finalText,
+      toolCalls,
+      iterations,
+      tokenUsage: { ...this.cumulativeTokenUsage }
+    };
   }
   /**
    * Get all available tools
@@ -2899,16 +3746,16 @@ var Agent = class {
   }
   /**
    * Run the agent with a user message (supports streaming)
-   * @param userMessage - The user's input message
-   * @param options - Optional configuration including abort signal
    */
-  async run(userMessage, options) {
-    const maxIterations = this.config.maxIterations ?? 200;
+  async run(userMessage) {
+    if (this.config.provider === "openrouter") {
+      return this.runWithProvider(userMessage);
+    }
+    const maxIterations = this.config.maxIterations ?? 15;
     const model = this.config.model ?? "claude-sonnet-4-5-20250929";
     const maxTokens = this.config.maxTokens ?? 8192;
     const systemPrompt = this.config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
     const useStreaming = this.config.streaming ?? true;
-    const signal = options?.signal;
     const allTools = await this.getAllTools();
     const contextManagement = this.config.contextEditing && this.config.contextEditing.length > 0 ? { edits: this.config.contextEditing } : void 0;
     const contextMessage = `[Working directory: ${this.workingDirectory}]
@@ -2922,9 +3769,6 @@ ${userMessage}`;
     let iterations = 0;
     let finalText = "";
     while (iterations < maxIterations) {
-      if (signal?.aborted) {
-        throw new Error("Operation aborted by user");
-      }
       iterations++;
       this.config.onStreamStart?.();
       let response;
@@ -2949,12 +3793,8 @@ ${userMessage}`;
         if (contextManagement) {
           streamOptions.context_management = contextManagement;
         }
-        const stream = this.anthropic.messages.stream(streamOptions, { signal });
+        const stream = this.anthropic.messages.stream(streamOptions);
         for await (const event of stream) {
-          if (signal?.aborted) {
-            stream.controller.abort();
-            throw new Error("Operation aborted by user");
-          }
           if (event.type === "content_block_delta") {
             const delta = event.delta;
             if (delta.type === "text_delta" && delta.text) {
@@ -3019,11 +3859,7 @@ ${userMessage}`;
       }
       const toolResults = [];
       for (const toolUse of toolUses) {
-        if (signal?.aborted) {
-          throw new Error("Operation aborted by user");
-        }
         this.config.onToolCall?.(toolUse.name, toolUse.input);
-        await new Promise((resolve2) => setImmediate(resolve2));
         const { result, source } = await this.executeTool(
           toolUse.name,
           toolUse.input
@@ -3134,15 +3970,17 @@ ${userMessage}`;
   }
   /**
    * Update cumulative token usage from API response
+   * @param usage - Token counts from the API response
+   * @param preCalculatedCost - Optional pre-calculated cost (from OpenRouter provider)
    */
-  updateTokenUsage(usage) {
+  updateTokenUsage(usage, preCalculatedCost) {
     const model = this.config.model ?? DEFAULT_MODEL;
     this.cumulativeTokenUsage.inputTokens = usage.input_tokens;
     this.cumulativeTokenUsage.outputTokens += usage.output_tokens;
     this.cumulativeTokenUsage.cacheCreationInputTokens = usage.cache_creation_input_tokens || 0;
     this.cumulativeTokenUsage.cacheReadInputTokens = usage.cache_read_input_tokens || 0;
     this.cumulativeTokenUsage.totalTokens = this.cumulativeTokenUsage.inputTokens + this.cumulativeTokenUsage.outputTokens;
-    const callCost = calculateCost(
+    const callCost = preCalculatedCost ?? calculateCost(
       model,
       usage.input_tokens,
       usage.output_tokens,
@@ -3204,19 +4042,34 @@ ${userMessage}`;
    * Set the model to use for future requests
    */
   setModel(modelIdOrAlias) {
-    const resolvedId = resolveModelId(modelIdOrAlias);
+    let resolvedId = resolveModelId(modelIdOrAlias);
+    let displayName;
+    if (resolvedId) {
+      const modelConfig = getModelConfig(resolvedId);
+      displayName = modelConfig?.displayName;
+    } else {
+      resolvedId = resolveOpenRouterModelId(modelIdOrAlias);
+      if (resolvedId) {
+        const orConfig = getOpenRouterModelConfig(resolvedId);
+        displayName = orConfig?.displayName ?? resolvedId;
+        if (!this.isOpenRouter() && resolvedId.includes("/")) {
+          this.config.provider = "openrouter";
+        }
+      }
+    }
     if (!resolvedId) {
-      const availableModels = Object.values(MODELS).map((m) => m.name).join(", ");
+      const anthropicModels = Object.values(MODELS).map((m) => m.name).join(", ");
+      const orModels = Object.values(OPENROUTER_MODELS2).slice(0, 5).map((m) => m.name).join(", ");
       return {
         success: false,
-        error: `Unknown model: "${modelIdOrAlias}". Available: ${availableModels}`
+        error: `Unknown model: "${modelIdOrAlias}". Anthropic: ${anthropicModels}. OpenRouter: ${orModels}, ...`
       };
     }
     this.config.model = resolvedId;
-    const modelConfig = getModelConfig(resolvedId);
+    this.llmProvider = void 0;
     return {
       success: true,
-      model: modelConfig?.displayName ?? resolvedId
+      model: displayName ?? resolvedId
     };
   }
   /**
@@ -3228,16 +4081,13 @@ ${userMessage}`;
   /**
    * Compact the conversation history to reduce token usage.
    * 
-   * This uses Claude to create a structured summary of the conversation,
+   * This uses the current LLM to create a structured summary of the conversation,
    * then replaces the history with just the summary. This dramatically
    * reduces token count while preserving important context.
    * 
    * @returns Object with original/new token counts and the summary
    */
   async compactHistory() {
-    const model = this.config.model ?? "claude-sonnet-4-5-20250929";
-    const systemPrompt = this.config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
-    const allTools = await this.getAllTools();
     if (this.conversationHistory.length < 2) {
       return {
         success: false,
@@ -3247,23 +4097,54 @@ ${userMessage}`;
       };
     }
     try {
-      const result = await compactConversation(
-        this.anthropic,
-        this.conversationHistory,
-        model,
-        systemPrompt,
-        allTools
-      );
-      this.conversationHistory = result.newHistory;
+      const originalContentLength = JSON.stringify(this.conversationHistory).length;
+      const originalTokens = Math.ceil(originalContentLength / 4);
+      const compactionPrompt = `Your context window is filling up. Create a concise summary of our conversation so far.
+
+Include:
+- User's main goals and what was accomplished
+- Files created/modified (with paths)
+- Key decisions and discoveries  
+- Next steps still needed
+- Any important context to preserve
+
+Be thorough but concise. The goal is to capture everything needed to continue seamlessly.`;
+      const compactionMessages = [
+        ...this.conversationHistory,
+        { role: "user", content: compactionPrompt }
+      ];
+      let summary;
+      if (this.config.provider === "openrouter" && this.llmProvider) {
+        const response = await this.llmProvider.chat(compactionMessages);
+        summary = response.text;
+      } else {
+        const model = this.config.model ?? DEFAULT_MODEL;
+        const response = await this.anthropic.messages.create({
+          model,
+          max_tokens: 4096,
+          messages: compactionMessages
+        });
+        const textBlocks = response.content.filter((block) => block.type === "text");
+        summary = textBlocks.map((block) => block.text).join("\n");
+      }
+      if (!summary || summary.trim().length === 0) {
+        throw new Error("Failed to generate summary");
+      }
+      const newHistory = [
+        { role: "assistant", content: summary.trim() }
+      ];
+      const newContentLength = JSON.stringify(newHistory).length;
+      const newTokens = Math.ceil(newContentLength / 4);
+      this.conversationHistory = newHistory;
       this.resetTokenUsage();
-      this.cumulativeTokenUsage.inputTokens = result.newTokens;
-      this.cumulativeTokenUsage.totalTokens = result.newTokens;
+      this.cumulativeTokenUsage.inputTokens = newTokens;
+      this.cumulativeTokenUsage.totalTokens = newTokens;
       this.config.onTokenUsage?.(this.cumulativeTokenUsage);
       return {
         success: true,
-        summary: result.summary,
-        originalTokenCount: result.originalTokens,
-        newTokenCount: result.newTokens
+        summary: summary.trim(),
+        originalTokenCount: originalTokens,
+        newTokenCount: newTokens
       };
     } catch (error2) {
       return {
@@ -3279,6 +4160,18 @@ ${userMessage}`;
    */
   setHistory(history) {
     this.conversationHistory = history;
+  }
+  /**
+   * Get conversation history (alias for getHistory)
+   */
+  getConversationHistory() {
+    return this.getHistory();
+  }
+  /**
+   * Set conversation history (alias for setHistory)
+   */
+  setConversationHistory(history) {
+    this.setHistory(history);
   }
 };
 function createAgent(config) {
@@ -3338,11 +4231,205 @@ function tableRow(label, value, width = 20) {
 }
 
 // src/ui/App.tsx
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { Box, Text, useApp, useInput } from "ink";
 import TextInput from "ink-text-input";
 import Spinner from "ink-spinner";
-import { Fragment, jsx, jsxs } from "react/jsx-runtime";
+
+// src/config/sessions.ts
+import { homedir as homedir2 } from "os";
+import { join as join3 } from "path";
+import { existsSync as existsSync2, mkdirSync, readdirSync, unlinkSync, writeFileSync, readFileSync } from "fs";
+var SESSIONS_DIR = join3(homedir2(), ".quantish", "sessions");
+var INDEX_FILE = join3(SESSIONS_DIR, "index.json");
+function ensureSessionsDir() {
+  if (!existsSync2(SESSIONS_DIR)) {
+    mkdirSync(SESSIONS_DIR, { recursive: true });
+  }
+}
+function generateSessionId() {
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).slice(2, 8);
+  return `${timestamp}-${random}`;
+}
+function loadIndex() {
+  ensureSessionsDir();
+  if (!existsSync2(INDEX_FILE)) {
+    return { lastSessionId: null, sessions: [] };
+  }
+  try {
+    const data = readFileSync(INDEX_FILE, "utf-8");
+    return JSON.parse(data);
+  } catch {
+    return { lastSessionId: null, sessions: [] };
+  }
+}
+function saveIndex(index) {
+  ensureSessionsDir();
+  writeFileSync(INDEX_FILE, JSON.stringify(index, null, 2), "utf-8");
+}
+function getSessionPath(id) {
+  return join3(SESSIONS_DIR, `${id}.json`);
+}
+var SessionManager = class {
+  /**
+   * Save a new session or update an existing one
+   */
+  saveSession(messages, model, provider, name, existingId) {
+    ensureSessionsDir();
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const id = existingId || generateSessionId();
+    const sessionName = name || `Session ${(/* @__PURE__ */ new Date()).toLocaleDateString()} ${(/* @__PURE__ */ new Date()).toLocaleTimeString()}`;
+    const session = {
+      id,
+      name: sessionName,
+      createdAt: existingId ? this.getSession(existingId)?.createdAt || now : now,
+      updatedAt: now,
+      messages,
+      model,
+      provider,
+      tokenCount: this.estimateTokenCount(messages)
+    };
+    const sessionPath = getSessionPath(id);
+    writeFileSync(sessionPath, JSON.stringify(session, null, 2), "utf-8");
+    const index = loadIndex();
+    index.lastSessionId = id;
+    const existingIndex = index.sessions.findIndex((s) => s.id === id);
+    const sessionMeta = {
+      id,
+      name: sessionName,
+      createdAt: session.createdAt,
+      updatedAt: now,
+      messageCount: messages.length
+    };
+    if (existingIndex >= 0) {
+      index.sessions[existingIndex] = sessionMeta;
+    } else {
+      index.sessions.unshift(sessionMeta);
+    }
+    if (index.sessions.length > 50) {
+      const toRemove = index.sessions.splice(50);
+      for (const s of toRemove) {
+        try {
+          unlinkSync(getSessionPath(s.id));
+        } catch {
+        }
+      }
+    }
+    saveIndex(index);
+    return session;
+  }
+  /**
+   * Get a session by ID
+   */
+  getSession(id) {
+    const sessionPath = getSessionPath(id);
+    if (!existsSync2(sessionPath)) {
+      return null;
+    }
+    try {
+      const data = readFileSync(sessionPath, "utf-8");
+      return JSON.parse(data);
+    } catch {
+      return null;
+    }
+  }
+  /**
+   * Get the last session
+   */
+  getLastSession() {
+    const index = loadIndex();
+    if (!index.lastSessionId) {
+      return null;
+    }
+    return this.getSession(index.lastSessionId);
+  }
+  /**
+   * Get a session by name
+   */
+  getSessionByName(name) {
+    const index = loadIndex();
+    const session = index.sessions.find(
+      (s) => s.name.toLowerCase() === name.toLowerCase()
+    );
+    if (!session) {
+      return null;
+    }
+    return this.getSession(session.id);
+  }
+  /**
+   * List all sessions
+   */
+  listSessions() {
+    const index = loadIndex();
+    return index.sessions;
+  }
+  /**
+   * Delete a session
+   */
+  deleteSession(id) {
+    const sessionPath = getSessionPath(id);
+    if (!existsSync2(sessionPath)) {
+      return false;
+    }
+    try {
+      unlinkSync(sessionPath);
+      const index = loadIndex();
+      index.sessions = index.sessions.filter((s) => s.id !== id);
+      if (index.lastSessionId === id) {
+        index.lastSessionId = index.sessions[0]?.id || null;
+      }
+      saveIndex(index);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  /**
+   * Clear all sessions
+   */
+  clearAllSessions() {
+    ensureSessionsDir();
+    try {
+      const files = readdirSync(SESSIONS_DIR);
+      for (const file of files) {
+        try {
+          unlinkSync(join3(SESSIONS_DIR, file));
+        } catch {
+        }
+      }
+    } catch {
+    }
+  }
+  /**
+   * Estimate token count from messages (rough estimate)
+   */
+  estimateTokenCount(messages) {
+    let totalChars = 0;
+    for (const msg of messages) {
+      if (typeof msg.content === "string") {
+        totalChars += msg.content.length;
+      } else if (Array.isArray(msg.content)) {
+        for (const block of msg.content) {
+          if ("text" in block && typeof block.text === "string") {
+            totalChars += block.text.length;
+          }
+        }
+      }
+    }
+    return Math.ceil(totalChars / 4);
+  }
+};
+var sessionManager = null;
+function getSessionManager() {
+  if (!sessionManager) {
+    sessionManager = new SessionManager();
+  }
+  return sessionManager;
+}
+
+// src/ui/App.tsx
+import { jsx, jsxs } from "react/jsx-runtime";
 function formatTokenCount(count) {
   if (count < 1e3) return String(count);
   if (count < 1e5) return `${(count / 1e3).toFixed(1)}k`;
@@ -3357,7 +4444,8 @@ var SLASH_COMMANDS = [
   { cmd: "/help", desc: "Show available commands" },
   { cmd: "/clear", desc: "Clear conversation history" },
   { cmd: "/compact", desc: "Summarize conversation to save tokens" },
-  { cmd: "/model", desc: "Switch model (opus, sonnet, haiku)" },
+  { cmd: "/model", desc: "Switch model (opus, sonnet, haiku, minimax, etc.)" },
+  { cmd: "/provider", desc: "Switch LLM provider (anthropic, openrouter)" },
   { cmd: "/cost", desc: "Show session cost breakdown" },
   { cmd: "/tools", desc: "List available tools" },
   { cmd: "/config", desc: "Show configuration info" },
@@ -3392,6 +4480,10 @@ function formatResult(result, maxLength = 200) {
   }
   return String(result);
 }
+function cleanModelOutput(text) {
+  if (!text) return text;
+  return text.replace(/<tool_call>/g, "").replace(/<\/tool_call>/g, "").replace(/<arg_key>/g, "").replace(/<\/arg_key>/g, "").replace(/<function_call>/g, "").replace(/<\/function_call>/g, "").trim();
+}
 function App({ agent, onExit }) {
   const { exit } = useApp();
   const [messages, setMessages] = useState([]);
@@ -3413,6 +4505,10 @@ function App({ agent, onExit }) {
   });
   const completedToolCalls = useRef([]);
   const abortController = useRef(null);
+  const [queuedInput, setQueuedInput] = useState("");
+  const [hasQueuedMessage, setHasQueuedMessage] = useState(false);
+  const sessionManager2 = useMemo(() => getSessionManager(), []);
+  const [currentSessionId, setCurrentSessionId] = useState(null);
   const handleSlashCommand = useCallback((command) => {
     const cmd = command.slice(1).toLowerCase().split(" ")[0];
     const args = command.slice(cmd.length + 2).trim();
@@ -3423,19 +4519,34 @@ function App({ agent, onExit }) {
           content: `\u{1F4DA} Available Commands:
 /clear      - Clear conversation history
 /compact    - Summarize conversation (keeps context, saves tokens)
-/model      - Switch model (opus, sonnet, haiku) 
+/model      - Switch model (opus, sonnet, haiku, minimax, etc.)
+/provider   - Switch LLM provider (anthropic, openrouter)
 /cost       - Show session cost breakdown
 /help       - Show this help message
 /tools      - List available tools
 /config     - Show configuration info
+
+\u{1F5C2}\uFE0F Session Commands:
+/save [name] - Save current session
+/resume      - Resume last session
+/sessions    - List saved sessions
+/load <id>   - Load a saved session
+/forget      - Delete all saved sessions
+
+\u{1F4CB} Process Commands:
 /processes  - List running background processes
 /stop <id>  - Stop a background process by ID
 /stopall    - Stop all background processes
+
 /exit       - Exit the CLI
 
 \u2328\uFE0F Keyboard Shortcuts:
-Esc         - Interrupt current generation
-Ctrl+C      - Exit (stops all processes)`
+Esc         - Interrupt current generation (or send queued message)
+Enter       - Queue message while agent is working
+Ctrl+C      - Exit (stops all processes)
+
+\u{1F4A1} Tip: You can type while the agent is working. Press Enter to queue
+        your message. Press Esc to interrupt and send immediately.`
         }]);
         return true;
       case "clear":
@@ -3576,30 +4687,46 @@ Use /stop <id> to stop a process.`
       case "model":
         if (!args) {
           const currentModel = agent.getModel();
+          const currentProvider = agent.getProvider();
           const modelConfig = getModelConfig(currentModel);
-          const models = listModels();
-          const modelList = models.map((m) => {
+          const orModelConfig = getOpenRouterModelConfig(currentModel);
+          const displayName = modelConfig?.displayName || orModelConfig?.displayName || currentModel;
+          const anthropicModels = listModels();
+          const anthropicList = anthropicModels.map((m) => {
             const isCurrent = m.id === currentModel ? " (current)" : "";
             return `  ${m.name}${isCurrent} - ${m.description}`;
           }).join("\n");
+          const orModels = listOpenRouterModels().slice(0, 8);
+          const orList = orModels.map((m) => {
+            const isCurrent = m.id === currentModel ? " (current)" : "";
+            return `  ${m.name}${isCurrent} - ${m.description.slice(0, 50)}...`;
+          }).join("\n");
           setMessages((prev) => [...prev, {
             role: "system",
-            content: `\u{1F916} Current model: ${modelConfig?.displayName || currentModel}
+            content: `\u{1F916} Current: ${displayName} (${currentProvider})
 
-Available models:
-${modelList}
+Anthropic Models:
+${anthropicList}
 
-Usage: /model <name>  (e.g., /model haiku, /model opus)`
+OpenRouter Models (selection):
+${orList}
+  ... and many more! Use any OpenRouter model ID like 'minimax/minimax-m2.1'
+
+Usage: /model <name>  (e.g., /model haiku, /model minimax)
+       Using an OpenRouter model auto-switches to OpenRouter provider.`
           }]);
           return true;
         }
         const result = agent.setModel(args);
         if (result.success) {
-          const newConfig = getModelConfig(agent.getModel());
+          const anthropicConfig = getModelConfig(agent.getModel());
+          const orConfig = getOpenRouterModelConfig(agent.getModel());
+          const description = anthropicConfig?.description || orConfig?.description || "";
+          const providerInfo = agent.isOpenRouter() ? " (OpenRouter)" : " (Anthropic)";
           setMessages((prev) => [...prev, {
             role: "system",
-            content: `\u2705 Switched to ${result.model}
-   ${newConfig?.description || ""}`
+            content: `\u2705 Switched to ${result.model}${providerInfo}
+   ${description}`
           }]);
         } else {
           setMessages((prev) => [...prev, {
@@ -3607,6 +4734,43 @@ Usage: /model <name>  (e.g., /model haiku, /model opus)`
             content: `\u274C ${result.error}`
           }]);
         }
+        return true;
+      case "provider":
+        if (!args) {
+          const currentProvider = agent.getProvider();
+          setMessages((prev) => [...prev, {
+            role: "system",
+            content: `\u{1F527} LLM Provider
+
+Current: ${currentProvider}
+
+Available providers:
+  anthropic   - Claude models (Opus, Sonnet, Haiku)
+  openrouter  - Multi-provider access (MiniMax, DeepSeek, Gemini, etc.)
+
+Usage: /provider <name>  (e.g., /provider openrouter)
+
+Note: When switching to OpenRouter, make sure OPENROUTER_API_KEY is set.
+      You can also just use /model with an OpenRouter model name.`
+          }]);
+          return true;
+        }
+        const providerArg = args.toLowerCase();
+        if (providerArg !== "anthropic" && providerArg !== "openrouter") {
+          setMessages((prev) => [...prev, {
+            role: "system",
+            content: `\u274C Unknown provider: "${args}". Use: anthropic, openrouter`
+          }]);
+          return true;
+        }
+        agent.setProvider(providerArg);
+        const providerModels = providerArg === "openrouter" ? "minimax, deepseek, gemini, grok, devstral" : "opus, sonnet, haiku";
+        setMessages((prev) => [...prev, {
+          role: "system",
+          content: `\u2705 Switched to ${providerArg} provider
+   Available models: ${providerModels}
+   Use /model to select a model.`
+        }]);
         return true;
       case "cost":
         const usage = agent.getTokenUsage();
@@ -3632,8 +4796,169 @@ Last API Call Cost:
 \u{1F4A1} Tip: Use /model haiku for cheaper operations, /compact to reduce context.`
         }]);
         return true;
+      case "save":
+        try {
+          const conversationHistory = agent.getConversationHistory();
+          if (conversationHistory.length === 0) {
+            setMessages((prev) => [...prev, {
+              role: "system",
+              content: "\u274C Nothing to save - conversation is empty."
+            }]);
+            return true;
+          }
+          const savedSession = sessionManager2.saveSession(
+            conversationHistory,
+            agent.getModel(),
+            agent.getProvider(),
+            args || void 0,
+            currentSessionId || void 0
+          );
+          setCurrentSessionId(savedSession.id);
+          setMessages((prev) => [...prev, {
+            role: "system",
+            content: `\u2705 Session saved: "${savedSession.name}"
+   ID: ${savedSession.id}
+   Messages: ${conversationHistory.length}`
+          }]);
+        } catch (err) {
+          setMessages((prev) => [...prev, {
+            role: "system",
+            content: `\u274C Failed to save session: ${err instanceof Error ? err.message : String(err)}`
+          }]);
+        }
+        return true;
+      case "resume":
+        try {
+          const lastSession = sessionManager2.getLastSession();
+          if (!lastSession) {
+            setMessages((prev) => [...prev, {
+              role: "system",
+              content: "\u274C No previous session to resume."
+            }]);
+            return true;
+          }
+          agent.setConversationHistory(lastSession.messages);
+          agent.setModel(lastSession.model);
+          if (lastSession.provider) {
+            agent.setProvider(lastSession.provider);
+          }
+          setCurrentSessionId(lastSession.id);
+          setMessages([{
+            role: "system",
+            content: `\u2705 Resumed session: "${lastSession.name}"
+   ${lastSession.messages.length} messages loaded
+   Model: ${lastSession.model} (${lastSession.provider})`
+          }]);
+        } catch (err) {
+          setMessages((prev) => [...prev, {
+            role: "system",
+            content: `\u274C Failed to resume session: ${err instanceof Error ? err.message : String(err)}`
+          }]);
+        }
+        return true;
+      case "sessions":
+        try {
+          const sessions = sessionManager2.listSessions();
+          if (sessions.length === 0) {
+            setMessages((prev) => [...prev, {
+              role: "system",
+              content: "\u{1F4CB} No saved sessions."
+            }]);
+            return true;
+          }
+          const sessionList = sessions.slice(0, 10).map((s, i) => {
+            const isCurrent = s.id === currentSessionId ? " (current)" : "";
+            const date = new Date(s.updatedAt).toLocaleDateString();
+            return `  ${i + 1}. ${s.name}${isCurrent}
+     ID: ${s.id} | ${s.messageCount} msgs | ${date}`;
+          }).join("\n\n");
+          const moreText = sessions.length > 10 ? `
+
+... and ${sessions.length - 10} more` : "";
+          setMessages((prev) => [...prev, {
+            role: "system",
+            content: `\u{1F5C2}\uFE0F Saved Sessions:
+
+${sessionList}${moreText}
+
+Use /load <id> to load a session.`
+          }]);
+        } catch (err) {
+          setMessages((prev) => [...prev, {
+            role: "system",
+            content: `\u274C Failed to list sessions: ${err instanceof Error ? err.message : String(err)}`
+          }]);
+        }
+        return true;
+      case "load":
+        if (!args) {
+          setMessages((prev) => [...prev, {
+            role: "system",
+            content: "\u2753 Usage: /load <session_id>\n   Use /sessions to see saved sessions."
+          }]);
+          return true;
+        }
+        try {
+          let loadSession = sessionManager2.getSession(args);
+          if (!loadSession) {
+            loadSession = sessionManager2.getSessionByName(args);
+          }
+          if (!loadSession) {
+            setMessages((prev) => [...prev, {
+              role: "system",
+              content: `\u274C Session not found: "${args}"`
+            }]);
+            return true;
+          }
+          agent.setConversationHistory(loadSession.messages);
+          agent.setModel(loadSession.model);
+          if (loadSession.provider) {
+            agent.setProvider(loadSession.provider);
+          }
+          setCurrentSessionId(loadSession.id);
+          setMessages([{
+            role: "system",
+            content: `\u2705 Loaded session: "${loadSession.name}"
+   ${loadSession.messages.length} messages loaded
+   Model: ${loadSession.model} (${loadSession.provider})`
+          }]);
+        } catch (err) {
+          setMessages((prev) => [...prev, {
+            role: "system",
+            content: `\u274C Failed to load session: ${err instanceof Error ? err.message : String(err)}`
+          }]);
+        }
+        return true;
+      case "forget":
+        try {
+          sessionManager2.clearAllSessions();
+          setCurrentSessionId(null);
+          setMessages((prev) => [...prev, {
+            role: "system",
+            content: "\u2705 All sessions deleted."
+          }]);
+        } catch (err) {
+          setMessages((prev) => [...prev, {
+            role: "system",
+            content: `\u274C Failed to clear sessions: ${err instanceof Error ? err.message : String(err)}`
+          }]);
+        }
+        return true;
       case "exit":
       case "quit":
+        try {
+          const history = agent.getConversationHistory();
+          if (history.length > 0) {
+            sessionManager2.saveSession(
+              history,
+              agent.getModel(),
+              agent.getProvider(),
+              void 0,
+              currentSessionId || void 0
+            );
+          }
+        } catch {
+        }
         if (processManager.hasRunning()) {
           processManager.killAll();
         }
@@ -3650,7 +4975,18 @@ Last API Call Cost:
   }, [agent, onExit, exit]);
   const handleSubmit = useCallback(async (value) => {
     const trimmed = value.trim();
-    if (!trimmed || isProcessing) return;
+    if (!trimmed) return;
+    if (isProcessing) {
+      setQueuedInput(trimmed);
+      setHasQueuedMessage(true);
+      setInput("");
+      setMessages((prev) => [...prev, {
+        role: "system",
+        content: `\u{1F4E5} Queued: "${trimmed.length > 50 ? trimmed.slice(0, 50) + "..." : trimmed}"
+   Press Esc to interrupt and send now.`
+      }]);
+      return;
+    }
     if (trimmed.startsWith("/")) {
       setInput("");
       handleSlashCommand(trimmed);
@@ -3680,7 +5016,7 @@ Last API Call Cost:
     completedToolCalls.current = [];
     abortController.current = new AbortController();
     try {
-      const result = await agent.run(trimmed, { signal: abortController.current?.signal });
+      const result = await agent.run(trimmed);
       if (isInterrupted) {
         setMessages((prev) => [...prev, {
           role: "system",
@@ -3689,9 +5025,10 @@ Last API Call Cost:
       } else {
         setMessages((prev) => {
           const filtered = prev.filter((m) => !m.isStreaming);
+          const cleanedText = cleanModelOutput(result.text || "");
           return [...filtered, {
             role: "assistant",
-            content: result.text || "(completed)",
+            content: cleanedText || "(completed)",
             toolCalls: result.toolCalls.map((tc) => ({
               name: tc.name,
               args: tc.input,
@@ -3705,21 +5042,25 @@ Last API Call Cost:
       setStreamingText("");
       setCurrentToolCalls([]);
     } catch (err) {
-      const errorMsg = err.message || String(err);
+      const errorMsg = err instanceof Error ? err.message : typeof err === "string" ? err : "Unknown error occurred";
       let displayError = errorMsg;
-      if (errorMsg.includes("aborted") || errorMsg.includes("AbortError")) {
+      const msgLower = errorMsg.toLowerCase();
+      if (msgLower.includes("aborted") || msgLower.includes("aborterror")) {
         setMessages((prev) => [...prev, {
           role: "system",
           content: "\u26A1 Generation interrupted by user."
         }]);
-      } else if (errorMsg.includes("credits exhausted")) {
-        displayError = "Anthropic API credits exhausted. Please add credits at console.anthropic.com";
+      } else if (msgLower.includes("credits exhausted")) {
+        displayError = "API credits exhausted. Please add credits to your provider.";
         setError(displayError);
-      } else if (errorMsg.includes("invalid_api_key") || errorMsg.includes("401")) {
-        displayError = 'Invalid Anthropic API key. Run "quantish init" to reconfigure.';
+      } else if (msgLower.includes("invalid_api_key") || msgLower.includes("401") || msgLower.includes("unauthorized")) {
+        displayError = 'Invalid API key. Run "quantish init" to reconfigure.';
         setError(displayError);
-      } else if (errorMsg.includes("rate_limit")) {
-        displayError = "Rate limited by Anthropic API. Please wait a moment and try again.";
+      } else if (msgLower.includes("rate_limit") || msgLower.includes("429")) {
+        displayError = "Rate limited. Please wait a moment and try again.";
+        setError(displayError);
+      } else if (msgLower.includes("cannot read properties of undefined") || msgLower.includes("undefined")) {
+        displayError = "Tool call parsing error. The model may have sent malformed output.";
         setError(displayError);
       } else {
         setError(displayError);
@@ -3730,6 +5071,23 @@ Last API Call Cost:
       abortController.current = null;
     }
   }, [agent, isProcessing, isInterrupted, exit, onExit, handleSlashCommand]);
+  const wasProcessing = useRef(false);
+  useEffect(() => {
+    const justFinished = wasProcessing.current && !isProcessing;
+    wasProcessing.current = isProcessing;
+    if (justFinished && hasQueuedMessage && queuedInput) {
+      const nextMessage = queuedInput;
+      setQueuedInput("");
+      setHasQueuedMessage(false);
+      setMessages((prev) => prev.filter(
+        (m) => !(m.role === "system" && m.content.startsWith("\u{1F4E5} Queued:"))
+      ));
+      const timer = setTimeout(() => {
+        handleSubmit(nextMessage);
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [isProcessing, hasQueuedMessage, queuedInput, handleSubmit]);
   useEffect(() => {
     const originalConfig = agent.config;
     agent.config = {
@@ -3737,7 +5095,10 @@ Last API Call Cost:
       streaming: true,
       onText: (text, isComplete) => {
         if (!isComplete) {
-          setStreamingText((prev) => prev + text);
+          const cleanText = text.replace(/<tool_call>/g, "").replace(/<\/tool_call>/g, "").replace(/<arg_key>/g, "").replace(/<\/arg_key>/g, "");
+          if (cleanText) {
+            setStreamingText((prev) => prev + cleanText);
+          }
         }
       },
       onThinking: (text) => {
@@ -3781,13 +5142,40 @@ Stopped ${count} background process${count > 1 ? "es" : ""}.`);
       onExit?.();
       exit();
     }
+    if (key.backspace && input === "" && hasQueuedMessage && queuedInput) {
+      setInput(queuedInput);
+      setQueuedInput("");
+      setHasQueuedMessage(false);
+      setMessages((prev) => prev.filter(
+        (m) => !(m.role === "system" && m.content.startsWith("\u{1F4E5} Queued:"))
+      ));
+    }
     if (key.escape && isProcessing) {
       setIsInterrupted(true);
       abortController.current?.abort();
-      setMessages((prev) => [...prev, {
-        role: "system",
-        content: "\u26A1 Interrupting..."
-      }]);
+      if (hasQueuedMessage && queuedInput) {
+        const messageToSend = queuedInput;
+        setQueuedInput("");
+        setHasQueuedMessage(false);
+        setIsProcessing(false);
+        setMessages((prev) => {
+          const filtered = prev.filter(
+            (m) => !(m.role === "system" && m.content.startsWith("\u{1F4E5} Queued:"))
+          );
+          return [...filtered, {
+            role: "system",
+            content: "\u26A1 Interrupted. Sending queued message..."
+          }];
+        });
+        setTimeout(() => {
+          handleSubmit(messageToSend);
+        }, 200);
+      } else {
+        setMessages((prev) => [...prev, {
+          role: "system",
+          content: "\u26A1 Interrupting..."
+        }]);
+      }
     }
   });
   return /* @__PURE__ */ jsxs(Box, { flexDirection: "column", padding: 1, children: [
@@ -3819,22 +5207,18 @@ Stopped ${count} background process${count > 1 ? "es" : ""}.`);
       msg.role === "system" && /* @__PURE__ */ jsx(Box, { children: /* @__PURE__ */ jsx(Text, { color: "gray", italic: true, children: msg.content }) })
     ] }, i)) }),
     currentToolCalls.length > 0 && /* @__PURE__ */ jsx(Box, { flexDirection: "column", marginBottom: 1, marginLeft: 2, children: currentToolCalls.map((tc, i) => /* @__PURE__ */ jsxs(Box, { flexDirection: "column", children: [
-      /* @__PURE__ */ jsx(Box, { children: tc.pending ? /* @__PURE__ */ jsxs(Fragment, { children: [
-        /* @__PURE__ */ jsx(Text, { color: "yellow", children: /* @__PURE__ */ jsx(Spinner, { type: "dots" }) }),
-        /* @__PURE__ */ jsxs(Text, { color: "cyan", bold: true, children: [
+      /* @__PURE__ */ jsxs(Box, { children: [
+        tc.pending ? /* @__PURE__ */ jsxs(Text, { color: "cyan", children: [
+          /* @__PURE__ */ jsx(Spinner, { type: "dots" }),
           " ",
           tc.name
-        ] }),
-        /* @__PURE__ */ jsx(Text, { color: "gray", children: formatArgs(tc.args) }),
-        /* @__PURE__ */ jsx(Text, { color: "yellow", dimColor: true, children: " Running..." })
-      ] }) : /* @__PURE__ */ jsxs(Fragment, { children: [
-        /* @__PURE__ */ jsxs(Text, { color: tc.success ? "green" : "red", children: [
+        ] }) : /* @__PURE__ */ jsxs(Text, { color: tc.success ? "blue" : "red", children: [
           tc.success ? "\u2713" : "\u2717",
           " ",
           tc.name
         ] }),
         /* @__PURE__ */ jsx(Text, { color: "gray", children: formatArgs(tc.args) })
-      ] }) }),
+      ] }),
       !tc.pending && tc.result && /* @__PURE__ */ jsx(Box, { marginLeft: 2, children: /* @__PURE__ */ jsxs(Text, { color: "gray", dimColor: true, children: [
         "\u2192 ",
         formatResult(tc.result, 100)
@@ -3854,9 +5238,10 @@ Stopped ${count} background process${count > 1 ? "es" : ""}.`);
       "\u274C Error: ",
       error2
     ] }) }),
-    isProcessing && !streamingText && currentToolCalls.length === 0 && /* @__PURE__ */ jsx(Box, { marginBottom: 1, children: /* @__PURE__ */ jsxs(Text, { color: "cyan", children: [
+    isProcessing && /* @__PURE__ */ jsx(Box, { marginBottom: 1, children: /* @__PURE__ */ jsxs(Text, { color: "cyan", children: [
       /* @__PURE__ */ jsx(Spinner, { type: "dots" }),
-      " Thinking..."
+      " ",
+      currentToolCalls.length > 0 ? `Working... (${currentToolCalls.filter((tc) => tc.pending).length} tool${currentToolCalls.filter((tc) => tc.pending).length !== 1 ? "s" : ""} running)` : streamingText ? "Generating..." : "Thinking..."
     ] }) }),
     input.startsWith("/") && !isProcessing && /* @__PURE__ */ jsxs(Box, { flexDirection: "column", marginBottom: 1, paddingLeft: 2, children: [
       /* @__PURE__ */ jsx(Text, { color: "gray", dimColor: true, children: "Commands:" }),
@@ -3868,22 +5253,29 @@ Stopped ${count} background process${count > 1 ? "es" : ""}.`);
         ] })
       ] }, i))
     ] }),
+    hasQueuedMessage && isProcessing && /* @__PURE__ */ jsxs(Box, { marginBottom: 1, paddingLeft: 2, children: [
+      /* @__PURE__ */ jsxs(Text, { color: "blue", children: [
+        "\u{1F4E5} Queued: ",
+        queuedInput.length > 40 ? queuedInput.slice(0, 40) + "..." : queuedInput
+      ] }),
+      /* @__PURE__ */ jsx(Text, { color: "gray", dimColor: true, children: " (Esc to send now)" })
+    ] }),
     /* @__PURE__ */ jsx(
       Box,
       {
         borderStyle: "round",
-        borderColor: isProcessing ? "gray" : "yellow",
+        borderColor: hasQueuedMessage ? "blue" : isProcessing ? "gray" : "yellow",
         paddingX: 1,
         marginTop: 1,
         children: /* @__PURE__ */ jsxs(Box, { children: [
-          /* @__PURE__ */ jsx(Text, { color: "yellow", bold: true, children: "\u276F " }),
+          /* @__PURE__ */ jsx(Text, { color: hasQueuedMessage ? "blue" : "yellow", bold: true, children: "\u276F " }),
           /* @__PURE__ */ jsx(
             TextInput,
             {
               value: input,
               onChange: setInput,
               onSubmit: handleSubmit,
-              placeholder: isProcessing ? "Processing..." : "Ask anything or type / for commands"
+              placeholder: hasQueuedMessage ? "Message queued. Type more or press Esc to send now." : isProcessing ? "Type to queue a message..." : "Ask anything or type / for commands"
             }
           )
         ] })
@@ -3911,7 +5303,7 @@ Stopped ${count} background process${count > 1 ? "es" : ""}.`);
 }
 
 // src/index.ts
-var VERSION = "0.1.0";
+var VERSION = "0.1.25";
 function cleanup() {
   if (processManager.hasRunning()) {
     const count = processManager.runningCount();
@@ -3936,19 +5328,8 @@ program.name("quantish").description("AI coding & trading agent for Polymarket")
 program.command("init").description("Configure Quantish CLI with your API keys").action(async () => {
   await runSetup();
 });
-program.command("config").description("View or edit configuration").option("-s, --show", "Show current configuration").option("-c, --clear", "Clear all configuration").option("--path", "Show config file path").option("--export", "Export configuration as .env format").option("--show-keys", "Show full API keys (use with caution)").option("--server <url>", "Set custom Trading MCP server URL").action(async (options) => {
+program.command("config").description("View or edit configuration").option("-s, --show", "Show current configuration").option("-c, --clear", "Clear all configuration").option("--path", "Show config file path").option("--export", "Export configuration as .env format").option("--show-keys", "Show full API keys (use with caution)").action(async (options) => {
   const config = getConfigManager();
-  if (options.server) {
-    try {
-      new URL(options.server);
-    } catch {
-      error("Invalid URL format. Please provide a valid URL (e.g., https://your-server.com/mcp)");
-      return;
-    }
-    config.set("mcpServerUrl", options.server);
-    success(`Trading MCP server URL set to: ${options.server}`);
-    return;
-  }
   if (options.path) {
     console.log(config.getConfigPath());
     return;
@@ -3967,11 +5348,15 @@ program.command("config").description("View or edit configuration").option("-s, 
     if (all2.anthropicApiKey) {
       console.log(`ANTHROPIC_API_KEY=${all2.anthropicApiKey}`);
     }
+    if (all2.openrouterApiKey) {
+      console.log(`OPENROUTER_API_KEY=${all2.openrouterApiKey}`);
+    }
     if (all2.quantishApiKey) {
       console.log(`QUANTISH_API_KEY=${all2.quantishApiKey}`);
     }
     console.log(`QUANTISH_MCP_URL=${all2.mcpServerUrl}`);
     console.log(`QUANTISH_MODEL=${all2.model || "claude-sonnet-4-5-20250929"}`);
+    console.log(`QUANTISH_PROVIDER=${all2.provider || "anthropic"}`);
     console.log();
     console.log(chalk3.dim("# Discovery MCP (public, read-only market data)"));
     console.log(`QUANTISH_DISCOVERY_URL=https://quantish.live/mcp`);
@@ -3986,11 +5371,14 @@ program.command("config").description("View or edit configuration").option("-s, 
   printDivider();
   if (options.showKeys) {
     tableRow("Anthropic API Key", all.anthropicApiKey || chalk3.dim("Not set"));
+    tableRow("OpenRouter API Key", all.openrouterApiKey || chalk3.dim("Not set"));
     tableRow("Quantish API Key", all.quantishApiKey || chalk3.dim("Not set"));
   } else {
     tableRow("Anthropic API Key", all.anthropicApiKey ? `${all.anthropicApiKey.slice(0, 10)}...` : chalk3.dim("Not set"));
+    tableRow("OpenRouter API Key", all.openrouterApiKey ? `${all.openrouterApiKey.slice(0, 10)}...` : chalk3.dim("Not set"));
     tableRow("Quantish API Key", all.quantishApiKey ? `${all.quantishApiKey.slice(0, 12)}...` : chalk3.dim("Not set"));
   }
+  tableRow("Provider", all.provider || "anthropic");
   tableRow("MCP Server URL", all.mcpServerUrl);
   tableRow("Model", all.model || "claude-sonnet-4-5-20250929");
   printDivider();
@@ -4123,7 +5511,9 @@ async function runInteractiveChat(options = {}) {
   const config = getConfigManager();
   const mcpClientManager = createMCPManager(options);
   const agent = createAgent({
+    provider: config.getProvider(),
     anthropicApiKey: config.getAnthropicApiKey(),
+    openrouterApiKey: config.getOpenRouterApiKey(),
     mcpClientManager,
     model: config.getModel(),
     enableLocalTools: options.enableLocal !== false,
@@ -4256,7 +5646,9 @@ async function runOneShotPrompt(message, options = {}) {
   const config = getConfigManager();
   const mcpClientManager = createMCPManager(options);
   const agent = createAgent({
+    provider: config.getProvider(),
     anthropicApiKey: config.getAnthropicApiKey(),
+    openrouterApiKey: config.getOpenRouterApiKey(),
     mcpClientManager,
     model: config.getModel(),
     enableLocalTools: options.enableLocal !== false,

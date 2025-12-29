@@ -32,6 +32,18 @@ import {
   resolveModelId,
   MODELS 
 } from './pricing.js';
+import {
+  createLLMProvider,
+  LLMProvider,
+  LLMResponse,
+} from './provider.js';
+import {
+  resolveOpenRouterModelId,
+  getOpenRouterModelConfig,
+  listOpenRouterModels,
+  OPENROUTER_MODELS,
+} from './openrouter.js';
+import type { LLMProvider as LLMProviderType } from '../config/manager.js';
 
 /**
  * Maximum characters for tool results stored in conversation history.
@@ -293,7 +305,11 @@ export interface ContextEditConfig {
 }
 
 export interface AgentConfig {
-  anthropicApiKey: string;
+  // LLM Provider configuration
+  provider?: LLMProviderType; // 'anthropic' | 'openrouter' - defaults to 'anthropic'
+  anthropicApiKey?: string; // Required if provider is 'anthropic'
+  openrouterApiKey?: string; // Required if provider is 'openrouter'
+  
   mcpClient?: MCPClient; // Legacy: single MCP client
   mcpClientManager?: MCPClientManager; // New: manages Discovery + Trading MCPs
   model?: string;
@@ -326,84 +342,46 @@ export interface AgentResult {
   tokenUsage: TokenUsage;
 }
 
-const DEFAULT_SYSTEM_PROMPT = `You are Quantish, an AI coding and trading agent. Be concise.
+const DEFAULT_SYSTEM_PROMPT = `You are Quantish, an AI coding and trading agent.
 
-## APIs
+## Trading Tools (via MCP)
+- Check wallet balances and positions
+- Place, cancel, and manage orders  
+- Get market prices and orderbook data
+- Search markets on Polymarket, Kalshi, Limitless
 
-TRADING (requires QUANTISH_API_KEY):
-- URL: https://quantish-sdk-production.up.railway.app/mcp/execute
-- Format: JSON-RPC 2.0 { jsonrpc: '2.0', method: 'tools/call', params: { name, arguments }, id }
-- Tools: get_balances, get_positions, place_order, cancel_order, get_orders, get_orderbook, get_price
+## Coding Tools (local)
+- read_file, write_file, edit_file, list_dir
+- grep (search), find_files
+- run_command (blocking), start_background_process (non-blocking)
+- git operations
 
-DISCOVERY (free):
-- URL: https://quantish.live/mcp/execute
-- Format: { name, arguments }
-- Key: qm_ueQeqrmvZyHtR1zuVbLYkhx0fKyVAuV8
-- Tools: search_markets, get_market_details, get_trending_markets
+## IMPORTANT: Background vs Blocking Commands
 
-## Response Structures (IMPORTANT - use these field paths)
+Use \`start_background_process\` for:
+- Dev servers: npm start, npm run dev, yarn dev, vite, next dev
+- Watch mode: npm run watch, tsc --watch
+- Any server or long-running process
+- Returns immediately with a process ID
 
-search_markets / get_trending_markets returns:
-{
-  "found": N,
-  "markets": [{ "platform", "id", "title", "markets": [{ "marketId", "question", "outcomes": [{ "name", "price" }], "clobTokenIds": "[json_array]", "conditionId" }] }]
-}
+Use \`run_command\` for:
+- Quick commands: ls, cat, npm install, npm run build
+- One-time operations that complete quickly
+- Blocks until command finishes
 
-get_market_details returns:
-{
-  "platform": "polymarket",
-  "id": "12345",
-  "conditionId": "0x...",
-  "title": "Market Title",
-  "clobTokenIds": "[\"TOKEN_YES\",\"TOKEN_NO\"]",
-  "markets": [{
-    "marketId": "67890",
-    "question": "Question?",
-    "outcomes": [{ "name": "Yes", "price": 0.55 }, { "name": "No", "price": 0.45 }],
-    "clobTokenIds": "[\"TOKEN_YES\",\"TOKEN_NO\"]"
-  }]
-}
+After starting a background process:
+1. Use \`get_process_output(process_id)\` to check if it started correctly
+2. Use \`list_processes()\` to see all running processes
+3. Use \`stop_process(process_id)\` to stop when done
 
-KEY FIELDS:
-- market.id = top-level ID for get_market_details
-- market.markets[0].marketId = sub-market ID
-- market.markets[0].outcomes[].name = "Yes"/"No" or outcome name
-- market.markets[0].outcomes[].price = decimal 0-1
-- JSON.parse(market.clobTokenIds || market.markets[0].clobTokenIds) = token IDs array
-- market.conditionId = condition ID for trading
-
-## Standalone App Code
-
-Trading helper:
-async function callTradingTool(name, args = {}) {
-  const res = await fetch('https://quantish-sdk-production.up.railway.app/mcp/execute', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.QUANTISH_API_KEY },
-    body: JSON.stringify({ jsonrpc: '2.0', method: 'tools/call', params: { name, arguments: args }, id: Date.now() })
-  });
-  return JSON.parse((await res.json()).result.content[0].text);
-}
-
-Discovery helper:
-async function callDiscoveryTool(name, args = {}) {
-  const res = await fetch('https://quantish.live/mcp/execute', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-API-Key': 'qm_ueQeqrmvZyHtR1zuVbLYkhx0fKyVAuV8' },
-    body: JSON.stringify({ name, arguments: args })
-  });
-  return JSON.parse((await res.json()).result.content[0].text);
-}
-
-## Rules
-1. Never use @modelcontextprotocol/sdk - use fetch()
-2. Always create .env.example and use dotenv
-3. Never hardcode/mock data - always fetch real data
-4. Check logs before restarting servers
-5. PREFER edit_lines over edit_file - uses line numbers, saves tokens`;
-
+## Guidelines
+- Be concise
+- Prices on Polymarket are 0.01-0.99 (probabilities)
+- For dangerous operations (rm, sudo), explain first`;
 
 export class Agent {
   private anthropic: Anthropic;
+  private llmProvider?: LLMProvider;
   private mcpClient?: MCPClient;
   private mcpClientManager?: MCPClientManager;
   private config: AgentConfig;
@@ -424,6 +402,7 @@ export class Agent {
     this.config = {
       enableLocalTools: true,
       enableMCPTools: true,
+      provider: 'anthropic', // Default to Anthropic
       // Default context editing: clear old tool uses when context exceeds 100k tokens
       contextEditing: config.contextEditing || [
         {
@@ -435,19 +414,227 @@ export class Agent {
       ...config,
     };
     
-    // Initialize Anthropic client with beta header for context editing
+    // Initialize Anthropic client (still needed for compaction and token counting)
     const headers: Record<string, string> = {};
     if (this.config.contextEditing && this.config.contextEditing.length > 0) {
       headers['anthropic-beta'] = 'context-management-2025-06-27';
     }
     
+    // Anthropic client for fallback operations
+    const anthropicKey = config.anthropicApiKey || 'placeholder';
     this.anthropic = new Anthropic({
-      apiKey: config.anthropicApiKey,
+      apiKey: anthropicKey,
       defaultHeaders: Object.keys(headers).length > 0 ? headers : undefined,
     });
+    
     this.mcpClient = config.mcpClient;
     this.mcpClientManager = config.mcpClientManager;
     this.workingDirectory = config.workingDirectory || process.cwd();
+  }
+
+  /**
+   * Get the API key for the current provider
+   */
+  private getApiKey(): string {
+    if (this.config.provider === 'openrouter') {
+      return this.config.openrouterApiKey || '';
+    }
+    return this.config.anthropicApiKey || '';
+  }
+
+  /**
+   * Check if using OpenRouter provider
+   */
+  isOpenRouter(): boolean {
+    return this.config.provider === 'openrouter';
+  }
+
+  /**
+   * Get the current provider name
+   */
+  getProvider(): LLMProviderType {
+    return this.config.provider || 'anthropic';
+  }
+
+  /**
+   * Set the LLM provider
+   */
+  setProvider(provider: LLMProviderType): void {
+    this.config.provider = provider;
+    this.llmProvider = undefined; // Reset provider to force recreation
+  }
+
+  /**
+   * Get or create the LLM provider instance
+   */
+  private async getOrCreateProvider(): Promise<LLMProvider> {
+    if (this.llmProvider) {
+      return this.llmProvider;
+    }
+
+    const allTools = await this.getAllTools();
+    const systemPrompt = this.config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
+    const model = this.config.model ?? DEFAULT_MODEL;
+    const maxTokens = this.config.maxTokens ?? 8192;
+
+    this.llmProvider = createLLMProvider({
+      provider: this.config.provider || 'anthropic',
+      apiKey: this.getApiKey(),
+      model,
+      maxTokens,
+      systemPrompt,
+      tools: allTools,
+      contextEditing: this.config.contextEditing,
+    });
+
+    return this.llmProvider;
+  }
+
+  /**
+   * Run the agent using the provider abstraction (for OpenRouter and future providers)
+   */
+  private async runWithProvider(userMessage: string): Promise<AgentResult> {
+    const maxIterations = this.config.maxIterations ?? 200;
+    const useStreaming = this.config.streaming ?? true;
+
+    // Get or create the LLM provider
+    const provider = await this.getOrCreateProvider();
+
+    // Add context about working directory
+    const contextMessage = `[Working directory: ${this.workingDirectory}]\n\n${userMessage}`;
+
+    // Add user message to history
+    this.conversationHistory.push({
+      role: 'user',
+      content: contextMessage,
+    });
+
+    const toolCalls: AgentResult['toolCalls'] = [];
+    let iterations = 0;
+    let finalText = '';
+
+    while (iterations < maxIterations) {
+      iterations++;
+      this.config.onStreamStart?.();
+
+      let response: LLMResponse;
+
+      if (useStreaming) {
+        // Use streaming
+        response = await provider.streamChat(this.conversationHistory, {
+          onText: (text) => {
+            finalText += text;
+            this.config.onText?.(text, false);
+          },
+          onThinking: (text) => {
+            this.config.onThinking?.(text);
+          },
+          onToolCall: (id, name, input) => {
+            this.config.onToolCall?.(name, input);
+          },
+        });
+        
+        // Mark text as complete
+        if (response.text) {
+          this.config.onText?.('', true);
+        }
+      } else {
+        // Non-streaming
+        response = await provider.chat(this.conversationHistory);
+        
+        if (response.text) {
+          finalText += response.text;
+          this.config.onText?.(response.text, true);
+        }
+      }
+
+      this.config.onStreamEnd?.();
+
+      // Update token usage - pass the pre-calculated cost from the provider
+      this.updateTokenUsage({
+        input_tokens: response.usage.inputTokens,
+        output_tokens: response.usage.outputTokens,
+        cache_creation_input_tokens: response.usage.cacheCreationTokens,
+        cache_read_input_tokens: response.usage.cacheReadTokens,
+      }, response.cost);
+
+      // Build response content for conversation history
+      const responseContent: ContentBlockParam[] = [];
+      if (response.text) {
+        responseContent.push({ type: 'text', text: response.text });
+      }
+      for (const tc of response.toolCalls) {
+        responseContent.push({
+          type: 'tool_use',
+          id: tc.id,
+          name: tc.name,
+          input: tc.input,
+        });
+      }
+
+      // If no tool calls, we're done
+      if (response.toolCalls.length === 0) {
+        this.conversationHistory.push({
+          role: 'assistant',
+          content: responseContent,
+        });
+        break;
+      }
+
+      // Execute tools
+      const toolResults: ToolResultBlockParam[] = [];
+
+      for (const toolCall of response.toolCalls) {
+        // Yield to allow UI to render pending state
+        await new Promise(resolve => setImmediate(resolve));
+
+        const { result, source } = await this.executeTool(
+          toolCall.name,
+          toolCall.input
+        );
+
+        const success = !(result && typeof result === 'object' && 'error' in result);
+        this.config.onToolResult?.(toolCall.name, result, success);
+
+        toolCalls.push({
+          name: toolCall.name,
+          input: toolCall.input,
+          result,
+          source,
+        });
+
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: toolCall.id,
+          content: JSON.stringify(result),
+        });
+      }
+
+      // Add assistant response and tool results to history
+      this.conversationHistory.push({
+        role: 'assistant',
+        content: responseContent,
+      });
+      this.conversationHistory.push({
+        role: 'user',
+        content: toolResults,
+      });
+
+      // Truncate for future context savings
+      this.truncateLastToolResults();
+
+      // Check if we should stop
+      if (response.stopReason === 'end_turn' && response.toolCalls.length === 0) {
+        break;
+      }
+    }
+
+    return {
+      text: finalText,
+      toolCalls,
+      iterations,
+      tokenUsage: { ...this.cumulativeTokenUsage },
+    };
   }
 
   /**
@@ -521,17 +708,18 @@ export class Agent {
 
   /**
    * Run the agent with a user message (supports streaming)
-   * @param userMessage - The user's input message
-   * @param options - Optional configuration including abort signal
    */
-  async run(userMessage: string, options?: { signal?: AbortSignal }): Promise<AgentResult> {
-    // No arbitrary limit - loop until LLM stops (safety cap at 200)
-    const maxIterations = this.config.maxIterations ?? 200;
+  async run(userMessage: string): Promise<AgentResult> {
+    // Route to provider-specific implementation if using OpenRouter
+    if (this.config.provider === 'openrouter') {
+      return this.runWithProvider(userMessage);
+    }
+    
+    const maxIterations = this.config.maxIterations ?? 15;
     const model = this.config.model ?? 'claude-sonnet-4-5-20250929';
     const maxTokens = this.config.maxTokens ?? 8192;
     const systemPrompt = this.config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
     const useStreaming = this.config.streaming ?? true;
-    const signal = options?.signal;
 
     // Get all available tools
     const allTools = await this.getAllTools();
@@ -555,11 +743,6 @@ export class Agent {
     let finalText = '';
 
     while (iterations < maxIterations) {
-      // Check if aborted before starting new iteration
-      if (signal?.aborted) {
-        throw new Error('Operation aborted by user');
-      }
-      
       iterations++;
       this.config.onStreamStart?.();
 
@@ -592,15 +775,10 @@ export class Agent {
           streamOptions.context_management = contextManagement;
         }
         
-        const stream = this.anthropic.messages.stream(streamOptions, { signal });
+        const stream = this.anthropic.messages.stream(streamOptions);
 
         // Process stream events
         for await (const event of stream) {
-          // Check for abort during streaming
-          if (signal?.aborted) {
-            stream.controller.abort();
-            throw new Error('Operation aborted by user');
-          }
           if (event.type === 'content_block_delta') {
             const delta = event.delta as any;
             if (delta.type === 'text_delta' && delta.text) {
@@ -694,16 +872,7 @@ export class Agent {
       const toolResults: ToolResultBlockParam[] = [];
 
       for (const toolUse of toolUses) {
-        // Check if aborted before each tool execution
-        if (signal?.aborted) {
-          throw new Error('Operation aborted by user');
-        }
-        
         this.config.onToolCall?.(toolUse.name, toolUse.input as Record<string, unknown>);
-
-        // Allow UI to render the "pending" state before executing
-        // This ensures the spinner is visible during tool execution
-        await new Promise(resolve => setImmediate(resolve));
 
         const { result, source } = await this.executeTool(
           toolUse.name,
@@ -840,8 +1009,13 @@ export class Agent {
 
   /**
    * Update cumulative token usage from API response
+   * @param usage - Token counts from the API response
+   * @param preCalculatedCost - Optional pre-calculated cost (from OpenRouter provider)
    */
-  private updateTokenUsage(usage: { input_tokens: number; output_tokens: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number }): void {
+  private updateTokenUsage(
+    usage: { input_tokens: number; output_tokens: number; cache_creation_input_tokens?: number | null; cache_read_input_tokens?: number | null },
+    preCalculatedCost?: CostBreakdown
+  ): void {
     const model = this.config.model ?? DEFAULT_MODEL;
     
     // Update cumulative counts
@@ -853,8 +1027,8 @@ export class Agent {
       this.cumulativeTokenUsage.inputTokens + 
       this.cumulativeTokenUsage.outputTokens;
 
-    // Calculate cost for THIS API call
-    const callCost = calculateCost(
+    // Use pre-calculated cost if provided (from OpenRouter), otherwise calculate
+    const callCost = preCalculatedCost ?? calculateCost(
       model,
       usage.input_tokens,
       usage.output_tokens,
@@ -929,22 +1103,41 @@ export class Agent {
    * Set the model to use for future requests
    */
   setModel(modelIdOrAlias: string): { success: boolean; model?: string; error?: string } {
-    const resolvedId = resolveModelId(modelIdOrAlias);
+    // Try resolving as Anthropic model first
+    let resolvedId = resolveModelId(modelIdOrAlias);
+    let displayName: string | undefined;
+    
+    if (resolvedId) {
+      const modelConfig = getModelConfig(resolvedId);
+      displayName = modelConfig?.displayName;
+    } else {
+      // Try resolving as OpenRouter model
+      resolvedId = resolveOpenRouterModelId(modelIdOrAlias);
+      if (resolvedId) {
+        const orConfig = getOpenRouterModelConfig(resolvedId);
+        displayName = orConfig?.displayName ?? resolvedId;
+        // Auto-switch to OpenRouter if using an OpenRouter model
+        if (!this.isOpenRouter() && resolvedId.includes('/')) {
+          this.config.provider = 'openrouter';
+        }
+      }
+    }
     
     if (!resolvedId) {
-      const availableModels = Object.values(MODELS).map(m => m.name).join(', ');
+      const anthropicModels = Object.values(MODELS).map(m => m.name).join(', ');
+      const orModels = Object.values(OPENROUTER_MODELS).slice(0, 5).map(m => m.name).join(', ');
       return {
         success: false,
-        error: `Unknown model: "${modelIdOrAlias}". Available: ${availableModels}`,
+        error: `Unknown model: "${modelIdOrAlias}". Anthropic: ${anthropicModels}. OpenRouter: ${orModels}, ...`,
       };
     }
     
     this.config.model = resolvedId;
-    const modelConfig = getModelConfig(resolvedId);
+    this.llmProvider = undefined; // Reset provider to force recreation with new model
     
     return {
       success: true,
-      model: modelConfig?.displayName ?? resolvedId,
+      model: displayName ?? resolvedId,
     };
   }
 
@@ -958,17 +1151,13 @@ export class Agent {
   /**
    * Compact the conversation history to reduce token usage.
    * 
-   * This uses Claude to create a structured summary of the conversation,
+   * This uses the current LLM to create a structured summary of the conversation,
    * then replaces the history with just the summary. This dramatically
    * reduces token count while preserving important context.
    * 
    * @returns Object with original/new token counts and the summary
    */
   async compactHistory(): Promise<CompactionResult> {
-    const model = this.config.model ?? 'claude-sonnet-4-5-20250929';
-    const systemPrompt = this.config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
-    const allTools = await this.getAllTools();
-
     // Don't compact if history is empty or very short
     if (this.conversationHistory.length < 2) {
       return {
@@ -980,28 +1169,75 @@ export class Agent {
     }
 
     try {
-      const result = await compactConversation(
-        this.anthropic,
-        this.conversationHistory,
-        model,
-        systemPrompt,
-        allTools
-      );
+      // Estimate original token count
+      const originalContentLength = JSON.stringify(this.conversationHistory).length;
+      const originalTokens = Math.ceil(originalContentLength / 4);
+      
+      // Use current provider for compaction
+      const compactionPrompt = `Your context window is filling up. Create a concise summary of our conversation so far.
 
+Include:
+- User's main goals and what was accomplished
+- Files created/modified (with paths)
+- Key decisions and discoveries  
+- Next steps still needed
+- Any important context to preserve
+
+Be thorough but concise. The goal is to capture everything needed to continue seamlessly.`;
+      
+      // Add compaction request to history
+      const compactionMessages: MessageParam[] = [
+        ...this.conversationHistory,
+        { role: 'user', content: compactionPrompt },
+      ];
+      
+      // Use the current provider to generate the summary
+      let summary: string;
+      
+      if (this.config.provider === 'openrouter' && this.llmProvider) {
+        // Use OpenRouter
+        const response = await this.llmProvider.chat(compactionMessages);
+        summary = response.text;
+      } else {
+        // Use Anthropic
+        const model = this.config.model ?? DEFAULT_MODEL;
+        const response = await this.anthropic.messages.create({
+          model,
+          max_tokens: 4096,
+          messages: compactionMessages,
+        });
+        
+        const textBlocks = response.content.filter(block => block.type === 'text');
+        summary = textBlocks.map(block => (block as any).text).join('\n');
+      }
+      
+      if (!summary || summary.trim().length === 0) {
+        throw new Error('Failed to generate summary');
+      }
+      
+      // Create new history from summary
+      const newHistory: MessageParam[] = [
+        { role: 'assistant', content: summary.trim() },
+      ];
+      
+      // Estimate new token count
+      const newContentLength = JSON.stringify(newHistory).length;
+      const newTokens = Math.ceil(newContentLength / 4);
+      
       // Replace history with compacted version
-      this.conversationHistory = result.newHistory;
+      this.conversationHistory = newHistory;
 
       // Reset and update token usage
       this.resetTokenUsage();
-      this.cumulativeTokenUsage.inputTokens = result.newTokens;
-      this.cumulativeTokenUsage.totalTokens = result.newTokens;
+      this.cumulativeTokenUsage.inputTokens = newTokens;
+      this.cumulativeTokenUsage.totalTokens = newTokens;
       this.config.onTokenUsage?.(this.cumulativeTokenUsage);
 
       return {
         success: true,
-        summary: result.summary,
-        originalTokenCount: result.originalTokens,
-        newTokenCount: result.newTokens,
+        summary: summary.trim(),
+        originalTokenCount: originalTokens,
+        newTokenCount: newTokens,
       };
     } catch (error) {
       return {
@@ -1018,6 +1254,20 @@ export class Agent {
    */
   setHistory(history: MessageParam[]): void {
     this.conversationHistory = history;
+  }
+  
+  /**
+   * Get conversation history (alias for getHistory)
+   */
+  getConversationHistory(): MessageParam[] {
+    return this.getHistory();
+  }
+  
+  /**
+   * Set conversation history (alias for setHistory)
+   */
+  setConversationHistory(history: MessageParam[]): void {
+    this.setHistory(history);
   }
 }
 

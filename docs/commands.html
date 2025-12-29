@@ -128,7 +128,12 @@
 
       <div class="command">
         <div class="command-name">/model [name]</div>
-        <div class="command-desc">Switch AI model. Options: <code>opus</code>, <code>sonnet</code>, <code>haiku</code>. Without argument, shows current model and available options.</div>
+        <div class="command-desc">Switch AI model. Options: <code>opus</code>, <code>sonnet</code>, <code>haiku</code> (Anthropic) or <code>glm</code>, <code>minimax</code>, <code>deepseek</code> (OpenRouter). Without argument, shows current model and available options.</div>
+      </div>
+
+      <div class="command">
+        <div class="command-name">/provider [name]</div>
+        <div class="command-desc">Switch LLM provider. Options: <code>anthropic</code>, <code>openrouter</code>. Without argument, shows current provider.</div>
       </div>
 
       <div class="command">
@@ -145,6 +150,35 @@
         <div class="command-name">/config</div>
         <div class="command-desc">Show configuration info.</div>
       </div>
+
+      <h3>Session Commands</h3>
+
+      <div class="command">
+        <div class="command-name">/save [name]</div>
+        <div class="command-desc">Save current conversation session with optional name.</div>
+      </div>
+
+      <div class="command">
+        <div class="command-name">/resume</div>
+        <div class="command-desc">Resume the last saved session.</div>
+      </div>
+
+      <div class="command">
+        <div class="command-name">/sessions</div>
+        <div class="command-desc">List all saved sessions.</div>
+      </div>
+
+      <div class="command">
+        <div class="command-name">/load [id]</div>
+        <div class="command-desc">Load a specific saved session by its ID.</div>
+      </div>
+
+      <div class="command">
+        <div class="command-name">/forget</div>
+        <div class="command-desc">Delete all saved sessions.</div>
+      </div>
+
+      <h3>Process Commands</h3>
 
       <div class="command">
         <div class="command-name">/processes</div>
@@ -178,11 +212,15 @@
         <tbody>
           <tr>
             <td><code>Enter</code></td>
-            <td>Send message</td>
+            <td>Send message (or queue if agent is working)</td>
           </tr>
           <tr>
             <td><code>Escape</code></td>
-            <td>Interrupt current generation</td>
+            <td>Interrupt current generation (sends queued message if any)</td>
+          </tr>
+          <tr>
+            <td><code>Backspace</code></td>
+            <td>Un-queue message (move back to input) when input is empty</td>
           </tr>
           <tr>
             <td><code>Ctrl+C</code></td>
@@ -191,9 +229,17 @@
         </tbody>
       </table>
 
+      <h2>Queued Input</h2>
+
+      <p>You can type while the agent is working. Your message will be queued and shown in the status bar:</p>
+
+      <pre><code>📥 Queued: your next message...</code></pre>
+
+      <p>The queued message will automatically send when the current operation completes. Press <code>Escape</code> to interrupt and send immediately, or <code>Backspace</code> on empty input to un-queue it.</p>
+
       <h2>Model Selection</h2>
 
-      <p>Switch between Claude models based on your needs:</p>
+      <h3>Anthropic Models (Claude)</h3>
 
       <table>
         <thead>
@@ -215,13 +261,46 @@
             <td><code>sonnet</code></td>
             <td>$3/MTok</td>
             <td>$15/MTok</td>
-            <td>Balanced performance (default)</td>
+            <td>Balanced performance (Anthropic default)</td>
           </tr>
           <tr>
             <td><code>haiku</code></td>
             <td>$1/MTok</td>
             <td>$5/MTok</td>
             <td>Simple tasks, high volume</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>OpenRouter Models</h3>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Model</th>
+            <th>Input</th>
+            <th>Output</th>
+            <th>Best For</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>glm</code></td>
+            <td>$0.40/MTok</td>
+            <td>$1.50/MTok</td>
+            <td>Coding, reasoning (OpenRouter default)</td>
+          </tr>
+          <tr>
+            <td><code>minimax</code></td>
+            <td>$0.15/MTok</td>
+            <td>$0.15/MTok</td>
+            <td>Fast, cheap, long context</td>
+          </tr>
+          <tr>
+            <td><code>deepseek</code></td>
+            <td>$0.27/MTok</td>
+            <td>$1.10/MTok</td>
+            <td>Reasoning, analysis</td>
           </tr>
         </tbody>
       </table>
@@ -235,10 +314,14 @@
         <div class="terminal-body">
           <div class="terminal-line">
             <span class="terminal-prompt">You:</span>
-            <span class="terminal-command"> /model haiku</span>
+            <span class="terminal-command"> /provider openrouter</span>
           </div>
-          <div class="terminal-line terminal-success">✓ Switched to Claude Haiku 4.5</div>
-          <div class="terminal-line terminal-output">   Fastest and most economical. Good for simple tasks.</div>
+          <div class="terminal-line terminal-success">✓ Switched to OpenRouter</div>
+          <div class="terminal-line">
+            <span class="terminal-prompt">You:</span>
+            <span class="terminal-command"> /model glm</span>
+          </div>
+          <div class="terminal-line terminal-success">✓ Switched to GLM-4.7</div>
         </div>
       </div>
 

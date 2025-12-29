@@ -141,63 +141,6 @@ export async function fileExists(filePath: string): Promise<LocalToolResult> {
 }
 
 /**
- * Edit specific lines in a file by line number (more token-efficient)
- * Uses line numbers instead of full string matching to reduce API costs
- */
-export async function editLines(
-  filePath: string,
-  startLine: number,
-  endLine: number,
-  newContent: string
-): Promise<LocalToolResult> {
-  try {
-    const resolvedPath = path.resolve(filePath);
-    
-    if (!existsSync(resolvedPath)) {
-      return { success: false, error: `File not found: ${filePath}` };
-    }
-
-    const content = await fs.readFile(resolvedPath, 'utf-8');
-    const lines = content.split('\n');
-    
-    // Validate line numbers (1-based)
-    if (startLine < 1 || endLine < startLine || startLine > lines.length) {
-      return { 
-        success: false, 
-        error: `Invalid line range: ${startLine}-${endLine}. File has ${lines.length} lines.` 
-      };
-    }
-    
-    // Convert to 0-based index
-    const startIdx = startLine - 1;
-    const endIdx = Math.min(endLine, lines.length); // endLine is inclusive
-    
-    // Split new content into lines
-    const newLines = newContent.split('\n');
-    
-    // Replace the lines
-    const beforeLines = lines.slice(0, startIdx);
-    const afterLines = lines.slice(endIdx);
-    const resultLines = [...beforeLines, ...newLines, ...afterLines];
-    
-    const newFileContent = resultLines.join('\n');
-    await fs.writeFile(resolvedPath, newFileContent, 'utf-8');
-    
-    return { 
-      success: true, 
-      data: { 
-        path: resolvedPath,
-        linesReplaced: endIdx - startIdx,
-        newLinesInserted: newLines.length,
-        totalLines: resultLines.length,
-      } 
-    };
-  } catch (error) {
-    return { success: false, error: `Failed to edit lines: ${error instanceof Error ? error.message : String(error)}` };
-  }
-}
-
-/**
  * Edit a file using search/replace
  * This is safer than full overwrite as it only modifies specific parts
  */
@@ -342,34 +285,8 @@ export const filesystemTools: Tool[] = [
     },
   },
   {
-    name: 'edit_lines',
-    description: 'Edit specific lines in a file by line number. MORE EFFICIENT than edit_file - use this when you know the line numbers from read_file. Only sends line numbers + new content, not full old content.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        path: {
-          type: 'string',
-          description: 'The path to the file to edit',
-        },
-        start_line: {
-          type: 'number',
-          description: 'The first line number to replace (1-based, inclusive)',
-        },
-        end_line: {
-          type: 'number',
-          description: 'The last line number to replace (1-based, inclusive)',
-        },
-        new_content: {
-          type: 'string',
-          description: 'The new content to insert (replaces lines start_line through end_line)',
-        },
-      },
-      required: ['path', 'start_line', 'end_line', 'new_content'],
-    },
-  },
-  {
     name: 'edit_file',
-    description: 'Edit a file by replacing a specific string with new content. Use edit_lines instead when you know line numbers - it uses fewer tokens.',
+    description: 'Edit a file by replacing a specific string with new content. Safer than write_file as it only modifies the targeted section. The old_string must match exactly (including whitespace).',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -393,130 +310,7 @@ export const filesystemTools: Tool[] = [
       required: ['path', 'old_string', 'new_string'],
     },
   },
-  {
-    name: 'setup_env',
-    description: 'Setup or update environment variables in a .env file for an application. Creates .env if it doesn\'t exist. Optionally creates a .env.example template. Use this when building any application that needs API keys or configuration.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        path: {
-          type: 'string',
-          description: 'Path to the .env file (default: ".env" in current directory)',
-        },
-        variables: {
-          type: 'object',
-          description: 'Object with environment variable names as keys and values. Example: { "QUANTISH_API_KEY": "abc123", "TOKEN_ID": "xyz" }',
-          additionalProperties: { type: 'string' },
-        },
-        overwrite: {
-          type: 'boolean',
-          description: 'If true, overwrite existing variables. Default false (skip existing).',
-        },
-        create_example: {
-          type: 'boolean',
-          description: 'If true, also create a .env.example template file with placeholder values.',
-        },
-      },
-      required: ['variables'],
-    },
-  },
 ];
-
-/**
- * Setup or update environment variables in a .env file
- * Creates .env if it doesn't exist, appends/updates variables if it does
- */
-export async function setupEnv(
-  envPath: string = '.env',
-  variables: Record<string, string>,
-  options?: { overwrite?: boolean; createExample?: boolean }
-): Promise<LocalToolResult> {
-  try {
-    const resolvedPath = path.resolve(envPath);
-    let content = '';
-    const existingVars: Record<string, string> = {};
-    
-    // Read existing .env if it exists
-    if (existsSync(resolvedPath)) {
-      content = await fs.readFile(resolvedPath, 'utf-8');
-      
-      // Parse existing variables
-      for (const line of content.split('\n')) {
-        const trimmed = line.trim();
-        if (trimmed && !trimmed.startsWith('#')) {
-          const eqIndex = trimmed.indexOf('=');
-          if (eqIndex > 0) {
-            const key = trimmed.slice(0, eqIndex);
-            const value = trimmed.slice(eqIndex + 1);
-            existingVars[key] = value;
-          }
-        }
-      }
-    }
-    
-    const updatedVars: string[] = [];
-    const addedVars: string[] = [];
-    const skippedVars: string[] = [];
-    
-    // Process each variable
-    for (const [key, value] of Object.entries(variables)) {
-      if (existingVars[key] !== undefined) {
-        if (options?.overwrite) {
-          // Replace in content
-          const regex = new RegExp(`^${key}=.*$`, 'm');
-          content = content.replace(regex, `${key}=${value}`);
-          updatedVars.push(key);
-        } else {
-          skippedVars.push(key);
-        }
-      } else {
-        // Add new variable
-        if (content && !content.endsWith('\n')) {
-          content += '\n';
-        }
-        content += `${key}=${value}\n`;
-        addedVars.push(key);
-      }
-    }
-    
-    // Write the updated .env file
-    await fs.writeFile(resolvedPath, content, 'utf-8');
-    
-    // Optionally create .env.example
-    if (options?.createExample) {
-      const examplePath = resolvedPath.replace(/\.env$/, '.env.example');
-      let exampleContent = '# Environment variables for this application\n';
-      exampleContent += '# Copy this file to .env and fill in your values\n\n';
-      
-      for (const key of Object.keys({ ...existingVars, ...variables })) {
-        if (key === 'QUANTISH_API_KEY') {
-          exampleContent += `# Get your API key at https://quantish.live\n`;
-          exampleContent += `${key}=your_api_key_here\n\n`;
-        } else {
-          exampleContent += `${key}=\n`;
-        }
-      }
-      
-      await fs.writeFile(examplePath, exampleContent, 'utf-8');
-    }
-    
-    return {
-      success: true,
-      data: {
-        path: resolvedPath,
-        added: addedVars,
-        updated: updatedVars,
-        skipped: skippedVars,
-        exampleCreated: options?.createExample || false,
-      },
-    };
-  } catch (error) {
-    return { 
-      success: false, 
-      error: `Failed to setup env: ${error instanceof Error ? error.message : String(error)}` 
-    };
-  }
-}
 
 /**
  * Execute a filesystem tool
@@ -536,28 +330,12 @@ export async function executeFilesystemTool(name: string, args: Record<string, u
       return deleteFile(args.path as string);
     case 'file_exists':
       return fileExists(args.path as string);
-    case 'edit_lines':
-      return editLines(
-        args.path as string,
-        args.start_line as number,
-        args.end_line as number,
-        args.new_content as string
-      );
     case 'edit_file':
       return editFile(
         args.path as string,
         args.old_string as string,
         args.new_string as string,
         { replaceAll: args.replace_all as boolean | undefined }
-      );
-    case 'setup_env':
-      return setupEnv(
-        (args.path as string) || '.env',
-        args.variables as Record<string, string>,
-        { 
-          overwrite: args.overwrite as boolean | undefined,
-          createExample: args.create_example as boolean | undefined,
-        }
       );
     default:
       return { success: false, error: `Unknown filesystem tool: ${name}` };

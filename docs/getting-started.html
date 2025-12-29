@@ -42,7 +42,12 @@
       
       <ul>
         <li><strong>Node.js 18+</strong> - <a href="https://nodejs.org">Download here</a></li>
-        <li><strong>Anthropic API Key</strong> - <a href="https://console.anthropic.com/">Get one here</a></li>
+        <li><strong>LLM API Key</strong> - Either:
+          <ul>
+            <li><a href="https://console.anthropic.com/">Anthropic API Key</a> (Claude models)</li>
+            <li><a href="https://openrouter.ai/settings/keys">OpenRouter API Key</a> (100+ models)</li>
+          </ul>
+        </li>
       </ul>
 
       <h2>Step 1: Install</h2>
@@ -83,12 +88,17 @@
           <div class="terminal-line terminal-output">&nbsp;</div>
           <div class="terminal-line terminal-output">🔐 Setting up Quantish Agent</div>
           <div class="terminal-line terminal-output">&nbsp;</div>
-          <div class="terminal-line terminal-output">Enter your Anthropic API key:</div>
+          <div class="terminal-line terminal-output">Choose your LLM Provider:</div>
+          <div class="terminal-line terminal-output">  1. Anthropic (Claude models)</div>
+          <div class="terminal-line terminal-output">  2. OpenRouter (100+ models)</div>
           <div class="terminal-line">
             <span class="terminal-prompt">></span>
-            <span class="terminal-command"> sk-ant-api03-...</span>
+            <span class="terminal-command"> 2</span>
           </div>
-          <div class="terminal-line terminal-success">✓ Anthropic API key configured</div>
+          <div class="terminal-line terminal-success">✓ LLM Provider set to openrouter</div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-output">Enter your OpenRouter API key:</div>
+          <div class="terminal-line terminal-success">✓ OpenRouter API key saved</div>
           <div class="terminal-line terminal-output">&nbsp;</div>
           <div class="terminal-line terminal-output">Creating your Quantish wallet...</div>
           <div class="terminal-line terminal-success">✓ Wallet created!</div>
@@ -100,9 +110,10 @@
       <h3>What happens during init?</h3>
 
       <ol>
-        <li><strong>Anthropic API Key</strong> - Stored locally for Claude AI access</li>
+        <li><strong>LLM Provider</strong> - Choose Anthropic (Claude) or OpenRouter (100+ models)</li>
+        <li><strong>API Key</strong> - Stored locally for your chosen LLM provider</li>
         <li><strong>Wallet Creation</strong> - A Polymarket wallet is created via the Quantish Signing Server</li>
-        <li><strong>API Key</strong> - Your personal Quantish API key is generated</li>
+        <li><strong>Quantish API Key</strong> - Your personal trading API key is generated</li>
       </ol>
 
       <div class="callout info">
@@ -184,11 +195,19 @@
         <tbody>
           <tr>
             <td><code>ANTHROPIC_API_KEY</code></td>
-            <td>Your Anthropic API key (required)</td>
+            <td>Anthropic API key (for Claude models)</td>
+          </tr>
+          <tr>
+            <td><code>OPENROUTER_API_KEY</code></td>
+            <td>OpenRouter API key (for 100+ models)</td>
           </tr>
           <tr>
             <td><code>QUANTISH_API_KEY</code></td>
             <td>Your Quantish trading API key</td>
+          </tr>
+          <tr>
+            <td><code>MCP_SERVER_URL</code></td>
+            <td>Optional: Custom Trading MCP server URL</td>
           </tr>
           <tr>
             <td><code>EXA_API_KEY</code></td>
@@ -197,8 +216,14 @@
         </tbody>
       </table>
 
-      <pre><code>export ANTHROPIC_API_KEY="sk-ant-..."
-export QUANTISH_API_KEY="pk_live_..."
+      <pre><code># For Anthropic
+export ANTHROPIC_API_KEY="sk-ant-..."
+
+# OR for OpenRouter
+export OPENROUTER_API_KEY="sk-or-..."
+
+# Plus your trading key
+export QUANTISH_API_KEY="qtsh_..."
 quantish</code></pre>
 
       <h2>Configuration File</h2>
@@ -206,9 +231,11 @@ quantish</code></pre>
       <p>Config is stored in <code>~/.quantish/config.json</code>:</p>
 
       <pre><code>{
-  "anthropicApiKey": "sk-ant-...",
-  "quantishApiKey": "pk_live_...",
-  "mcpServerUrl": "https://quantish-sdk-production.up.railway.app/mcp"
+  "provider": "openrouter",
+  "openrouterApiKey": "sk-or-...",
+  "quantishApiKey": "qtsh_...",
+  "mcpServerUrl": "https://quantish-sdk-production.up.railway.app/mcp",
+  "model": "z-ai/glm-4.7"
 }</code></pre>
 
       <h2>Next Steps</h2>

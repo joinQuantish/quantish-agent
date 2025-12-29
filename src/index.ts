@@ -19,7 +19,7 @@ import { localTools, processManager } from './tools/index.js';
 import * as ui from './ui/index.js';
 import { App } from './ui/App.js';
 
-const VERSION = '0.1.0';
+const VERSION = '0.1.25';
 
 /**
  * Cleanup function to kill all background processes on exit
@@ -76,22 +76,8 @@ program
   .option('--path', 'Show config file path')
   .option('--export', 'Export configuration as .env format')
   .option('--show-keys', 'Show full API keys (use with caution)')
-  .option('--server <url>', 'Set custom Trading MCP server URL')
   .action(async (options) => {
     const config = getConfigManager();
-
-    if (options.server) {
-      // Validate URL format
-      try {
-        new URL(options.server);
-      } catch {
-        ui.error('Invalid URL format. Please provide a valid URL (e.g., https://your-server.com/mcp)');
-        return;
-      }
-      config.set('mcpServerUrl', options.server);
-      ui.success(`Trading MCP server URL set to: ${options.server}`);
-      return;
-    }
 
     if (options.path) {
       console.log(config.getConfigPath());
@@ -114,11 +100,15 @@ program
       if (all.anthropicApiKey) {
         console.log(`ANTHROPIC_API_KEY=${all.anthropicApiKey}`);
       }
+      if (all.openrouterApiKey) {
+        console.log(`OPENROUTER_API_KEY=${all.openrouterApiKey}`);
+      }
       if (all.quantishApiKey) {
         console.log(`QUANTISH_API_KEY=${all.quantishApiKey}`);
       }
       console.log(`QUANTISH_MCP_URL=${all.mcpServerUrl}`);
       console.log(`QUANTISH_MODEL=${all.model || 'claude-sonnet-4-5-20250929'}`);
+      console.log(`QUANTISH_PROVIDER=${all.provider || 'anthropic'}`);
       console.log();
       console.log(chalk.dim('# Discovery MCP (public, read-only market data)'));
       console.log(`QUANTISH_DISCOVERY_URL=https://quantish.live/mcp`);
@@ -137,13 +127,16 @@ program
     if (options.showKeys) {
       // Show full keys
       ui.tableRow('Anthropic API Key', all.anthropicApiKey || chalk.dim('Not set'));
+      ui.tableRow('OpenRouter API Key', all.openrouterApiKey || chalk.dim('Not set'));
       ui.tableRow('Quantish API Key', all.quantishApiKey || chalk.dim('Not set'));
     } else {
       // Show truncated keys
       ui.tableRow('Anthropic API Key', all.anthropicApiKey ? `${all.anthropicApiKey.slice(0, 10)}...` : chalk.dim('Not set'));
+      ui.tableRow('OpenRouter API Key', all.openrouterApiKey ? `${all.openrouterApiKey.slice(0, 10)}...` : chalk.dim('Not set'));
       ui.tableRow('Quantish API Key', all.quantishApiKey ? `${all.quantishApiKey.slice(0, 12)}...` : chalk.dim('Not set'));
     }
     
+    ui.tableRow('Provider', all.provider || 'anthropic');
     ui.tableRow('MCP Server URL', all.mcpServerUrl);
     ui.tableRow('Model', all.model || 'claude-sonnet-4-5-20250929');
     ui.printDivider();
@@ -341,7 +334,9 @@ async function runInteractiveChat(options: ChatOptions = {}): Promise<void> {
   const mcpClientManager = createMCPManager(options);
 
   const agent = createAgent({
-    anthropicApiKey: config.getAnthropicApiKey()!,
+    provider: config.getProvider(),
+    anthropicApiKey: config.getAnthropicApiKey(),
+    openrouterApiKey: config.getOpenRouterApiKey(),
     mcpClientManager,
     model: config.getModel(),
     enableLocalTools: options.enableLocal !== false,
@@ -522,7 +517,9 @@ async function runOneShotPrompt(message: string, options: OneShotOptions = {}): 
   const mcpClientManager = createMCPManager(options);
 
   const agent = createAgent({
-    anthropicApiKey: config.getAnthropicApiKey()!,
+    provider: config.getProvider(),
+    anthropicApiKey: config.getAnthropicApiKey(),
+    openrouterApiKey: config.getOpenRouterApiKey(),
     mcpClientManager,
     model: config.getModel(),
     enableLocalTools: options.enableLocal !== false,
