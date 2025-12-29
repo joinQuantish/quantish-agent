@@ -27,7 +27,8 @@
       
       <div class="nav-section">Resources</div>
       <ul class="nav-tree">
-        <li><a href="https://github.com/joinQuantish/quantish-agent" target="_blank"><span class="nav-prefix">○</span> GitHub</a></li>
+        <li><a href="https://github.com/joinQuantish/quantish-agent" target="_blank"><span class="nav-prefix">○</span> Agent GitHub</a></li>
+        <li><a href="https://github.com/joinQuantish/quantish-server" target="_blank"><span class="nav-prefix">○</span> Server GitHub</a></li>
         <li><a href="https://www.npmjs.com/package/@quantish/agent" target="_blank"><span class="nav-prefix">○</span> NPM</a></li>
         <li><a href="https://quantish.live" target="_blank"><span class="nav-prefix">○</span> quantish.live</a></li>
       </ul>
@@ -162,45 +163,131 @@ X-API-Key: &lt;user-api-key&gt;</code></pre>
         </tbody>
       </table>
 
-      <h2>Deployment Options</h2>
+      <h2>Using @quantish/server</h2>
 
-      <h3>Railway (Recommended)</h3>
+      <p>We provide an official self-hosting package on NPM:</p>
 
-      <p>Deploy with one click using the Quantish server template:</p>
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line">
+            <span class="terminal-prompt">$</span>
+            <span class="terminal-command"> npm install @quantish/server</span>
+          </div>
+        </div>
+      </div>
 
-      <ol>
-        <li>Fork the <a href="https://github.com/joinQuantish/quantish-server" target="_blank">quantish-server</a> repository</li>
-        <li>Connect to <a href="https://railway.app" target="_blank">Railway</a></li>
-        <li>Add PostgreSQL addon for user data</li>
-        <li>Set environment variables (see below)</li>
-        <li>Deploy!</li>
-      </ol>
+      <p>Source code: <a href="https://github.com/joinQuantish/quantish-server" target="_blank">github.com/joinQuantish/quantish-server</a></p>
 
-      <h3>Docker</h3>
+      <h3>Quick Start</h3>
 
-      <pre><code>docker run -d \
-  -p 3000:3000 \
-  -e DATABASE_URL=postgres://... \
-  -e POLYMARKET_API_KEY=... \
-  -e POLYMARKET_API_SECRET=... \
-  -e POLYMARKET_PASSPHRASE=... \
-  joinquantish/quantish-server:latest</code></pre>
+      <pre><code>import { createServer, PostgresAdapter } from '@quantish/server';
 
-      <h3>Manual Deployment</h3>
+const server = await createServer({
+  database: new PostgresAdapter({
+    connectionString: process.env.DATABASE_URL
+  }),
+  encryption: {
+    masterKey: process.env.QUANTISH_MASTER_KEY
+  }
+});
 
-      <pre><code># Clone the server
-git clone https://github.com/joinQuantish/quantish-server.git
-cd quantish-server
+server.listen(3000);
+console.log('Quantish server running on http://localhost:3000');</code></pre>
 
-# Install dependencies
-npm install
+      <h3>Generate Master Key</h3>
 
-# Configure environment
-cp .env.example .env
-# Edit .env with your credentials
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line">
+            <span class="terminal-prompt">$</span>
+            <span class="terminal-command"> npx quantish generate-key</span>
+          </div>
+          <div class="terminal-line terminal-output">🔐 Generated master key (save this securely!):</div>
+          <div class="terminal-line terminal-output">a1b2c3d4e5f6...</div>
+        </div>
+      </div>
 
-# Run
-npm start</code></pre>
+      <h3>Packages Included</h3>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Package</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>@quantish/server</code></td>
+            <td>Express server with trading endpoints</td>
+          </tr>
+          <tr>
+            <td><code>@quantish/core</code></td>
+            <td>Encryption, signing, wallet utilities</td>
+          </tr>
+          <tr>
+            <td><code>@quantish/types</code></td>
+            <td>TypeScript type definitions</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Manual Implementation</h3>
+
+      <p>If you prefer to build from scratch, your server must implement a JSON-RPC 2.0 compatible endpoint:</p>
+
+      <pre><code>// server.js - Minimal Trading MCP Server
+import express from 'express';
+
+const app = express();
+app.use(express.json());
+
+app.post('/mcp/execute', async (req, res) => {
+  const { method, params, id } = req.body;
+  const apiKey = req.headers['x-api-key'];
+  
+  // Validate API key
+  if (!validateApiKey(apiKey)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  
+  try {
+    let result;
+    switch (params.name) {
+      case 'get_balances':
+        result = await getBalances(apiKey);
+        break;
+      case 'place_order':
+        result = await placeOrder(apiKey, params.arguments);
+        break;
+      // ... implement other tools
+    }
+    
+    res.json({
+      jsonrpc: '2.0',
+      result: { content: [{ type: 'text', text: JSON.stringify(result) }] },
+      id
+    });
+  } catch (error) {
+    res.json({
+      jsonrpc: '2.0',
+      error: { code: -32000, message: error.message },
+      id
+    });
+  }
+});
+
+app.listen(3000);</code></pre>
 
       <h2>Required Environment Variables</h2>
 
@@ -240,7 +327,7 @@ npm start</code></pre>
       <p>To run your own Trading MCP server, you need Polymarket Builder API credentials:</p>
 
       <ol>
-        <li>Apply at <a href="https://polymarket.com/builder" target="_blank">polymarket.com/builder</a></li>
+        <li>Apply via the <a href="https://docs.polymarket.com/" target="_blank">Polymarket Developer Docs</a></li>
         <li>Complete the application process (typically 1-2 weeks)</li>
         <li>Once approved, you'll receive API key, secret, and passphrase</li>
       </ol>

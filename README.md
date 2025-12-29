@@ -258,7 +258,15 @@ const response = await fetch('https://quantish-sdk-production.up.railway.app/mcp
 
 ## Self-Hosting
 
-You can self-host the Quantish MCP server:
+You can self-host your own Trading MCP server for full control over your wallet keys.
+
+### Install the Server
+
+```bash
+npm install @quantish/server
+```
+
+### Configure the CLI
 
 ```bash
 # Set custom server URL
@@ -267,6 +275,14 @@ quantish config --server https://your-server.com/mcp
 # Or use environment variable
 export MCP_SERVER_URL=https://your-server.com/mcp
 ```
+
+### Resources
+
+- **NPM Package**: [@quantish/server](https://www.npmjs.com/package/@quantish/server)
+- **GitHub**: [joinQuantish/quantish-server](https://github.com/joinQuantish/quantish-server)
+- **Polymarket API**: [docs.polymarket.com](https://docs.polymarket.com)
+
+See the [Self-Hosting Guide](https://docs.quantish.live/self-hosting.html) for full deployment instructions.
 
 ## Platform Support
 
