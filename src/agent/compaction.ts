@@ -84,7 +84,7 @@ export function parseCompactedSummary(response: string): string | null {
 export async function createCompactedSummary(
   anthropic: Anthropic,
   history: MessageParam[],
-  model: string = 'claude-sonnet-4-20250514',
+  model: string = 'claude-sonnet-4-5-20250929',
   customPrompt?: string
 ): Promise<string> {
   const prompt = customPrompt || COMPACTION_PROMPT;
@@ -174,7 +174,7 @@ export async function compactConversation(
   }
 
   // Generate summary (can use a faster/cheaper model for this)
-  const summaryModel = 'claude-sonnet-4-20250514'; // Could use Haiku for cost savings
+  const summaryModel = 'claude-sonnet-4-5-20250929'; // Could use Haiku for cost savings
   const summary = await createCompactedSummary(anthropic, history, summaryModel);
 
   // Create new history from summary
