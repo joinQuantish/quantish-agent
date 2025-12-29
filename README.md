@@ -1,11 +1,11 @@
 # @quantish/agent
 
-AI-powered coding & trading agent for Polymarket. Build trading bots, analyze markets, and execute trades using natural language.
+AI-powered coding & trading agent for Polymarket and Kalshi. Build trading bots, analyze markets, and execute trades using natural language.
 
 ## ✨ Features
 
 - **🤖 Multi-Provider AI** - Use Anthropic Claude or 100+ OpenRouter models (GLM-4.7, MiniMax, DeepSeek, etc.)
-- **💹 Live Trading** - Place orders, manage positions, check balances on Polymarket
+- **💹 Live Trading** - Trade on Polymarket (Polygon) and Kalshi (Solana via DFlow)
 - **🔧 Full Coding Tools** - Read/write files, run commands, git operations
 - **🌐 Web Search** - Search the web with Exa AI or DuckDuckGo fallback
 - **💾 Session Persistence** - Save and resume conversations across sessions
@@ -30,15 +30,24 @@ quantish
 
 ## How It Works
 
-The agent connects to two MCP (Model Context Protocol) servers:
+The agent connects to three MCP (Model Context Protocol) servers:
 
-1. **Discovery MCP** (Public) - Market search, trending markets, market details
-2. **Trading MCP** (Your API Key) - Wallet, orders, positions, trades
+| MCP | URL | Auth | Purpose |
+|-----|-----|------|---------|
+| Discovery | `quantish.live/mcp` | Public (embedded key) | Search markets across all platforms |
+| Polymarket | `quantish-sdk-production.up.railway.app/mcp` | `QUANTISH_API_KEY` | Trade on Polymarket (Polygon) |
+| Kalshi | `kalshi-mcp-production-7c2c.up.railway.app/mcp` | `KALSHI_API_KEY` | Trade on Kalshi (Solana via DFlow) |
 
-Your wallet is created and managed through our signing server, which:
-- ✅ Handles gasless transactions (Polymarket covers fees)
+**Polymarket** - Managed Polygon wallet:
+- ✅ Gasless transactions (Polymarket covers fees)
 - ✅ Signs orders using Polymarket's required format  
 - ✅ Works globally (no geo-restrictions)
+- 🔒 Non-custodial - export your private key anytime
+
+**Kalshi** - Managed Solana wallet via DFlow:
+- ✅ Trade on CFTC-regulated Kalshi markets
+- ✅ Uses DFlow protocol for on-chain settlement
+- ⚡ Small SOL fees (~0.01 SOL per trade)
 - 🔒 Non-custodial - export your private key anytime
 
 ## Interactive Commands
@@ -141,23 +150,48 @@ quantish --version          # Show version
 | `web_answer` | AI-powered Q&A (requires Exa API key) |
 | `fetch_url` | Fetch URL content |
 
-### MCP Tools (Trading)
+### MCP Tools - Discovery
 
-| Tool | Server | Description |
-|------|--------|-------------|
-| `search_markets` | Discovery | Search markets by query |
-| `get_trending_markets` | Discovery | Get trending/popular markets |
-| `get_market_details` | Discovery | Get market info and prices |
-| `get_balances` | Trading | Check wallet balances |
-| `get_positions` | Trading | View current positions |
-| `place_order` | Trading | Place buy/sell orders |
-| `cancel_order` | Trading | Cancel open orders |
-| `get_orders` | Trading | List orders |
-| `get_orderbook` | Trading | Get market orderbook |
-| `get_price` | Trading | Get current price |
-| `transfer_usdc` | Trading | Transfer USDC |
-| `claim_winnings` | Trading | Claim from resolved markets |
-| `export_private_key` | Trading | Export wallet private key |
+| Tool | Description |
+|------|-------------|
+| `search_markets` | Search markets across Polymarket, Kalshi, Limitless |
+| `get_trending_markets` | Get trending/popular markets |
+| `get_market_details` | Get market info and prices |
+| `get_categories` | List available categories |
+| `get_market_stats` | Get platform statistics |
+
+### MCP Tools - Polymarket Trading
+
+| Tool | Description |
+|------|-------------|
+| `get_balances` | Check USDC and position balances |
+| `get_positions` | View current positions |
+| `place_order` | Place buy/sell orders |
+| `cancel_order` | Cancel open orders |
+| `get_orders` | List orders |
+| `get_orderbook` | Get market orderbook |
+| `get_price` | Get current price |
+| `transfer_usdc` | Transfer USDC |
+| `claim_winnings` | Claim from resolved markets |
+| `export_private_key` | Export wallet private key |
+
+### MCP Tools - Kalshi Trading
+
+| Tool | Description |
+|------|-------------|
+| `kalshi_signup` | Create new account with Solana wallet |
+| `kalshi_search_markets` | Search Kalshi markets |
+| `kalshi_get_market` | Get market details by ticker |
+| `kalshi_get_events` | Browse market categories |
+| `kalshi_get_live_data` | Get live market data |
+| `kalshi_get_quote` | Get quote for buy/sell order |
+| `kalshi_place_order` | Execute a trade on Solana |
+| `kalshi_get_wallet_info` | Get wallet address and balances |
+| `kalshi_get_positions` | View Kalshi positions |
+| `kalshi_check_market_initialization` | Check if market is tokenized |
+| `kalshi_initialize_market` | Initialize market on-chain |
+| `kalshi_check_redemption_status` | Check if market can be redeemed |
+| `kalshi_export_private_key` | Export Solana private key |
 
 ## LLM Providers
 
@@ -201,9 +235,11 @@ Configuration is stored in `~/.quantish/config.json`.
 |----------|-------------|
 | `ANTHROPIC_API_KEY` | Anthropic API key |
 | `OPENROUTER_API_KEY` | OpenRouter API key |
-| `QUANTISH_API_KEY` | Quantish trading API key |
+| `QUANTISH_API_KEY` | Polymarket trading API key |
+| `KALSHI_API_KEY` | Kalshi trading API key |
 | `EXA_API_KEY` | Exa AI search key (optional) |
-| `MCP_SERVER_URL` | Custom Trading MCP server URL |
+| `MCP_SERVER_URL` | Custom Polymarket MCP server URL |
+| `KALSHI_MCP_URL` | Custom Kalshi MCP server URL |
 
 ### Export Configuration
 
@@ -217,11 +253,12 @@ The agent can build standalone applications that use the Quantish MCP API. When 
 
 1. **Use HTTP API** - Don't use MCP SDK directly
 2. **Environment Variables** - Store API keys in `.env`
-3. **Two Endpoints**:
+3. **Three Endpoints**:
    - Discovery: `https://quantish.live/mcp/execute` (public)
-   - Trading: `https://quantish-sdk-production.up.railway.app/mcp/execute` (requires API key)
+   - Polymarket: `https://quantish-sdk-production.up.railway.app/mcp/execute` (requires `QUANTISH_API_KEY`)
+   - Kalshi: `https://kalshi-mcp-production-7c2c.up.railway.app/mcp` (requires `KALSHI_API_KEY`)
 
-Example API call:
+Example API calls:
 
 ```javascript
 // Discovery MCP (simple format)
@@ -237,7 +274,7 @@ const response = await fetch('https://quantish.live/mcp/execute', {
   })
 });
 
-// Trading MCP (JSON-RPC format)
+// Polymarket Trading MCP (JSON-RPC format)
 const response = await fetch('https://quantish-sdk-production.up.railway.app/mcp/execute', {
   method: 'POST',
   headers: {
@@ -248,39 +285,67 @@ const response = await fetch('https://quantish-sdk-production.up.railway.app/mcp
     jsonrpc: '2.0',
     id: 1,
     method: 'tools/call',
-    params: {
-      name: 'get_positions',
-      arguments: {}
-    }
+    params: { name: 'get_positions', arguments: {} }
+  })
+});
+
+// Kalshi Trading MCP (JSON-RPC format)
+const response = await fetch('https://kalshi-mcp-production-7c2c.up.railway.app/mcp', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-API-Key': process.env.KALSHI_API_KEY
+  },
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'tools/call',
+    params: { name: 'kalshi_get_positions', arguments: {} }
   })
 });
 ```
 
 ## Self-Hosting
 
-You can self-host your own Trading MCP server for full control over your wallet keys.
+You can self-host your own Trading MCP servers for full control over your wallet keys.
 
-### Install the Server
+### Polymarket Server
 
 ```bash
 npm install @quantish/server
 ```
 
-### Configure the CLI
-
 ```bash
-# Set custom server URL
-quantish config --server https://your-server.com/mcp
-
-# Or use environment variable
+# Configure CLI to use your server
 export MCP_SERVER_URL=https://your-server.com/mcp
 ```
 
-### Resources
-
-- **NPM Package**: [@quantish/server](https://www.npmjs.com/package/@quantish/server)
+Resources:
+- **NPM**: [@quantish/server](https://www.npmjs.com/package/@quantish/server)
 - **GitHub**: [joinQuantish/quantish-server](https://github.com/joinQuantish/quantish-server)
 - **Polymarket API**: [docs.polymarket.com](https://docs.polymarket.com)
+
+### Kalshi Server
+
+```bash
+npm install @quantish/kalshi-server
+```
+
+```bash
+# Configure CLI to use your server
+export KALSHI_MCP_URL=https://your-kalshi-server.com/mcp
+```
+
+Required environment variables for Kalshi server:
+- `DATABASE_URL` - PostgreSQL connection string
+- `ENCRYPTION_KEY` - 64-char hex string for wallet encryption
+- `DFLOW_API_KEY` - DFlow API key
+- `SOLANA_RPC_URL` - Solana RPC endpoint
+
+Resources:
+- **NPM**: [@quantish/kalshi-server](https://www.npmjs.com/package/@quantish/kalshi-server)
+- **GitHub**: [joinQuantish/kalshi-mcp](https://github.com/joinQuantish/kalshi-mcp)
+- **DFlow Docs**: [docs.dflow.net](https://docs.dflow.net)
 
 See the [Self-Hosting Guide](https://docs.quantish.live/self-hosting.html) for full deployment instructions.
 
@@ -295,19 +360,26 @@ See the [Self-Hosting Guide](https://docs.quantish.live/self-hosting.html) for f
 ## Examples
 
 ```bash
-# Search for markets
+# Search for markets (both Polymarket and Kalshi)
 quantish -p "find markets about bitcoin"
 
-# Check positions
-quantish -p "show my positions with P&L"
+# Check Polymarket positions
+quantish -p "show my Polymarket positions with P&L"
+
+# Check Kalshi positions
+quantish -p "show my Kalshi positions"
+
+# Create a Kalshi account
+quantish
+> Create a Kalshi account for me
+
+# Trade on Kalshi
+quantish
+> Buy $10 of YES on the next Fed rate decision market on Kalshi
 
 # Build a trading bot
 quantish
 > Create a bot that monitors Trump markets and alerts me when prices change more than 5%
-
-# Start a dev server
-quantish
-> Start my React app on port 3001
 
 # Code review
 quantish

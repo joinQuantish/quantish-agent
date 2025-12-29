@@ -36,7 +36,7 @@
     <main class="main">
       <h1>Available Tools</h1>
       
-      <p>Quantish Agent has access to two categories of tools: <strong>Local Tools</strong> that run on your machine, and <strong>MCP Trading Tools</strong> that execute on Polymarket.</p>
+      <p>Quantish Agent has access to two categories of tools: <strong>Local Tools</strong> that run on your machine, and <strong>MCP Trading Tools</strong> that execute on Polymarket and Kalshi.</p>
 
       <h2>Local Tools</h2>
 
@@ -214,9 +214,9 @@
         <div class="tool-desc">Scan for arbitrage opportunities across markets.</div>
       </div>
 
-      <h3>Trading Tools (Requires Wallet)</h3>
+      <h3>Polymarket Trading Tools</h3>
 
-      <p>Requires <code>quantish init</code> to set up your wallet.</p>
+      <p>Requires <code>QUANTISH_API_KEY</code> - set up via <code>quantish init</code>.</p>
 
       <div class="tool-card">
         <span class="tool-name">get_balances</span>
@@ -290,6 +290,88 @@
         <div class="tool-desc">Export your wallet's private key for backup or migration.</div>
       </div>
 
+      <h3>Kalshi Trading Tools</h3>
+
+      <p>Trade on Kalshi markets via DFlow on Solana. Requires <code>KALSHI_API_KEY</code> - create an account by asking the agent "Create a Kalshi account for me".</p>
+
+      <div class="tool-card">
+        <span class="tool-name">kalshi_signup</span>
+        <span class="tool-category">kalshi</span>
+        <div class="tool-desc">Create a new Kalshi account with a managed Solana wallet. Returns your API key.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">kalshi_search_markets</span>
+        <span class="tool-category">kalshi</span>
+        <div class="tool-desc">Search Kalshi markets by keyword (also available via Discovery MCP).</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">kalshi_get_market</span>
+        <span class="tool-category">kalshi</span>
+        <div class="tool-desc">Get detailed market info by ticker including token mint addresses.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">kalshi_get_events</span>
+        <span class="tool-category">kalshi</span>
+        <div class="tool-desc">Browse Kalshi event categories and markets.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">kalshi_get_live_data</span>
+        <span class="tool-category">kalshi</span>
+        <div class="tool-desc">Get live price and volume data for markets.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">kalshi_get_quote</span>
+        <span class="tool-category">kalshi</span>
+        <div class="tool-desc">Get a quote for buying YES or NO shares on a market.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">kalshi_place_order</span>
+        <span class="tool-category">kalshi</span>
+        <div class="tool-desc">Execute a trade on Solana via DFlow. Returns transaction details.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">kalshi_get_wallet_info</span>
+        <span class="tool-category">kalshi</span>
+        <div class="tool-desc">Get your Solana wallet address and balances (SOL, USDC).</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">kalshi_get_positions</span>
+        <span class="tool-category">kalshi</span>
+        <div class="tool-desc">View your current Kalshi market positions.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">kalshi_check_market_initialization</span>
+        <span class="tool-category">kalshi</span>
+        <div class="tool-desc">Check if a market is tokenized on-chain.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">kalshi_initialize_market</span>
+        <span class="tool-category">kalshi</span>
+        <div class="tool-desc">Initialize (tokenize) a market on Solana if not already done.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">kalshi_check_redemption_status</span>
+        <span class="tool-category">kalshi</span>
+        <div class="tool-desc">Check if a settled market can be redeemed for winnings.</div>
+      </div>
+
+      <div class="tool-card">
+        <span class="tool-name">kalshi_export_private_key</span>
+        <span class="tool-category">kalshi</span>
+        <div class="tool-desc">Export your Solana wallet's private key for backup.</div>
+      </div>
+
       <h2>Example: Using Tools</h2>
 
       <div class="terminal">
@@ -322,7 +404,7 @@
       </div>
 
       <div class="footer">
-        <p>© 2025 <a href="https://quantish.live">Quantish Inc.</a> • <a href="https://agent.quantish.live">Agent</a> • <a href="https://github.com/joinQuantish/quantish-agent">GitHub</a> • <a href="https://polyformproject.org/licenses/noncommercial/1.0.0/">PolyForm NC</a></p>
+        <p>Built by <a href="https://quantish.live">Quantish Inc.</a> • <a href="https://github.com/joinQuantish/quantish-agent">GitHub</a> • PolyForm Noncommercial License</p>
       </div>
     </main>
   </div>

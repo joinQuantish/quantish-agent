@@ -42,7 +42,7 @@ interface JSONRPCResponse {
 /**
  * Source identifier for MCP servers
  */
-export type MCPSource = 'discovery' | 'trading';
+export type MCPSource = 'discovery' | 'trading' | 'kalshi';
 
 /**
  * Extended MCPTool with source information
@@ -72,7 +72,7 @@ export class MCPClient {
       return this.toolsCache;
     }
 
-    // Discovery MCP uses REST API format
+    // Discovery MCP uses REST API format, Trading and Kalshi use JSON-RPC
     if (this.source === 'discovery') {
       const response = await fetch(`${this.baseUrl}/tools`, {
         method: 'GET',
@@ -251,12 +251,14 @@ export function createMCPClient(baseUrl: string, apiKey: string, source: MCPSour
  * MCP Client Manager
  * 
  * Manages connections to multiple MCP servers:
- * - Discovery MCP: Always available with embedded public key (market data)
- * - Trading MCP: Available when user has configured their API key (wallet/orders)
+ * - Discovery MCP: Always available with embedded public key (Polymarket market data)
+ * - Trading MCP: Available when user has configured their API key (Polymarket wallet/orders)
+ * - Kalshi MCP: Available when user has configured their Kalshi API key (Kalshi markets via DFlow)
  */
 export class MCPClientManager {
   private discoveryClient: MCPClient;
   private tradingClient: MCPClient | null;
+  private kalshiClient: MCPClient | null;
   private toolSourceMap: Map<string, MCPSource> = new Map();
   private allToolsCache: MCPToolWithSource[] | null = null;
 
@@ -264,22 +266,36 @@ export class MCPClientManager {
     discoveryUrl: string,
     discoveryApiKey: string,
     tradingUrl?: string,
-    tradingApiKey?: string
+    tradingApiKey?: string,
+    kalshiUrl?: string,
+    kalshiApiKey?: string
   ) {
     // Discovery MCP is always available
     this.discoveryClient = new MCPClient(discoveryUrl, discoveryApiKey, 'discovery');
     
-    // Trading MCP is optional
+    // Trading MCP is optional (Polymarket)
     this.tradingClient = tradingUrl && tradingApiKey
       ? new MCPClient(tradingUrl, tradingApiKey, 'trading')
+      : null;
+    
+    // Kalshi MCP is optional
+    this.kalshiClient = kalshiUrl && kalshiApiKey
+      ? new MCPClient(kalshiUrl, kalshiApiKey, 'kalshi')
       : null;
   }
 
   /**
-   * Check if trading is enabled
+   * Check if trading is enabled (Polymarket)
    */
   isTradingEnabled(): boolean {
     return this.tradingClient !== null;
+  }
+
+  /**
+   * Check if Kalshi trading is enabled
+   */
+  isKalshiEnabled(): boolean {
+    return this.kalshiClient !== null;
   }
 
   /**
@@ -294,6 +310,13 @@ export class MCPClientManager {
    */
   getTradingClient(): MCPClient | null {
     return this.tradingClient;
+  }
+
+  /**
+   * Get the Kalshi client (may be null)
+   */
+  getKalshiClient(): MCPClient | null {
+    return this.kalshiClient;
   }
 
   /**
@@ -318,7 +341,7 @@ export class MCPClientManager {
       console.warn('Failed to fetch Discovery MCP tools:', error);
     }
 
-    // Get Trading tools (if available)
+    // Get Trading tools (if available - Polymarket)
     if (this.tradingClient) {
       try {
         const tradingTools = await this.tradingClient.listTools();
@@ -329,6 +352,19 @@ export class MCPClientManager {
         }
       } catch (error) {
         console.warn('Failed to fetch Trading MCP tools:', error);
+      }
+    }
+
+    // Get Kalshi tools (if available)
+    if (this.kalshiClient) {
+      try {
+        const kalshiTools = await this.kalshiClient.listTools();
+        for (const tool of kalshiTools) {
+          allTools.push({ ...tool, source: 'kalshi' });
+          this.toolSourceMap.set(tool.name, 'kalshi');
+        }
+      } catch (error) {
+        console.warn('Failed to fetch Kalshi MCP tools:', error);
       }
     }
 
@@ -370,11 +406,22 @@ export class MCPClientManager {
       if (!this.tradingClient) {
         return {
           success: false,
-          error: `Trading not enabled. Run 'quantish init' to set up trading.`,
+          error: `Polymarket trading not enabled. Run 'quantish init' to set up trading.`,
         };
       }
       const result = await this.tradingClient.callTool(name, args);
       return { ...result, source: 'trading' };
+    }
+
+    if (source === 'kalshi') {
+      if (!this.kalshiClient) {
+        return {
+          success: false,
+          error: `Kalshi trading not enabled. Run 'quantish init' to set up your Kalshi API key.`,
+        };
+      }
+      const result = await this.kalshiClient.callTool(name, args);
+      return { ...result, source: 'kalshi' };
     }
 
     return {
@@ -404,14 +451,16 @@ export class MCPClientManager {
 }
 
 /**
- * Create an MCP Client Manager with both Discovery and Trading clients
+ * Create an MCP Client Manager with Discovery, Trading, and Kalshi clients
  */
 export function createMCPClientManager(
   discoveryUrl: string,
   discoveryApiKey: string,
   tradingUrl?: string,
-  tradingApiKey?: string
+  tradingApiKey?: string,
+  kalshiUrl?: string,
+  kalshiApiKey?: string
 ): MCPClientManager {
-  return new MCPClientManager(discoveryUrl, discoveryApiKey, tradingUrl, tradingApiKey);
+  return new MCPClientManager(discoveryUrl, discoveryApiKey, tradingUrl, tradingApiKey, kalshiUrl, kalshiApiKey);
 }
 

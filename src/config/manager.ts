@@ -14,17 +14,21 @@ export interface QuantishConfig {
   anthropicApiKey?: string;
   openrouterApiKey?: string;
   quantishApiKey?: string;
+  kalshiApiKey?: string;
   mcpServerUrl: string;
   model?: string;
   provider?: LLMProvider;
 }
 
-// Trading MCP - requires user's API key for wallet/order operations
+// Trading MCP (Polymarket) - requires user's API key for wallet/order operations
 const DEFAULT_TRADING_MCP_URL = 'https://quantish-sdk-production.up.railway.app/mcp';
 
-// Discovery MCP - public read-only market data (embedded key)
+// Discovery MCP (Polymarket) - public read-only market data (embedded key)
 export const DISCOVERY_MCP_URL = 'https://quantish.live/mcp';
 export const DISCOVERY_MCP_PUBLIC_KEY = 'qm_ueQeqrmvZyHtR1zuVbLYkhx0fKyVAuV8';
+
+// Kalshi MCP - Kalshi markets via DFlow on Solana
+export const KALSHI_MCP_URL = 'https://kalshi-mcp-production-7c2c.up.railway.app/mcp';
 
 // Legacy alias
 const DEFAULT_MCP_URL = DEFAULT_TRADING_MCP_URL;
@@ -41,6 +45,9 @@ const schema = {
     type: 'string' as const,
   },
   quantishApiKey: {
+    type: 'string' as const,
+  },
+  kalshiApiKey: {
     type: 'string' as const,
   },
   mcpServerUrl: {
@@ -121,6 +128,24 @@ class ConfigManager {
    */
   setQuantishApiKey(key: string): void {
     this.conf.set('quantishApiKey', key);
+  }
+
+  /**
+   * Get the Kalshi API key
+   */
+  getKalshiApiKey(): string | undefined {
+    // Check environment variable first
+    const envKey = process.env.KALSHI_API_KEY;
+    if (envKey) return envKey;
+    
+    return this.conf.get('kalshiApiKey');
+  }
+
+  /**
+   * Set the Kalshi API key
+   */
+  setKalshiApiKey(key: string): void {
+    this.conf.set('kalshiApiKey', key);
   }
 
   /**

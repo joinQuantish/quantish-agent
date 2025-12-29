@@ -112,13 +112,15 @@
       <ol>
         <li><strong>LLM Provider</strong> - Choose Anthropic (Claude) or OpenRouter (100+ models)</li>
         <li><strong>API Key</strong> - Stored locally for your chosen LLM provider</li>
-        <li><strong>Wallet Creation</strong> - A Polymarket wallet is created via the Quantish Signing Server</li>
-        <li><strong>Quantish API Key</strong> - Your personal trading API key is generated</li>
+        <li><strong>Polymarket Wallet</strong> - A Polygon wallet is created via the Quantish Signing Server</li>
+        <li><strong>Kalshi Account</strong> - Optional: Create a Solana wallet for Kalshi trading</li>
       </ol>
 
       <div class="callout info">
-        <div class="callout-title">About the Signing Server</div>
-        <p>Polymarket uses a gasless relayer system. The Quantish Signing Server handles the complex signature formats and relays transactions. Your funds remain non-custodial - you can export your private key anytime.</p>
+        <div class="callout-title">About the Signing Servers</div>
+        <p><strong>Polymarket:</strong> Gasless trading on Polygon via the Quantish Signing Server. Polymarket covers all transaction fees.</p>
+        <p><strong>Kalshi:</strong> Trading on Solana via DFlow protocol. Small SOL fees (~0.01 SOL per trade).</p>
+        <p>Both wallets are non-custodial - you can export your private keys anytime.</p>
       </div>
 
       <h2>Step 3: Start Trading</h2>
@@ -155,7 +157,32 @@
         </div>
       </div>
 
-      <h2>Step 4: Fund Your Wallet</h2>
+      <h2>Step 4: Set Up Kalshi (Optional)</h2>
+
+      <p>To trade on Kalshi, ask the agent to create an account:</p>
+
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line">
+            <span class="terminal-prompt">You:</span>
+            <span class="terminal-command"> create a Kalshi account for me</span>
+          </div>
+          <div class="terminal-line terminal-output">✓ kalshi_signup()</div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-success">Account created!</div>
+          <div class="terminal-line terminal-output">• Solana Address: 7xKX...abcd</div>
+          <div class="terminal-line terminal-output">• API Key: kalshi_abc123...</div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-output">Save this API key! Run 'quantish init' to add it to config.</div>
+        </div>
+      </div>
+
+      <h2>Step 5: Fund Your Wallets</h2>
 
       <p>To trade on Polymarket, you need USDC in your wallet. Ask the agent for your deposit address:</p>
 
@@ -203,11 +230,19 @@
           </tr>
           <tr>
             <td><code>QUANTISH_API_KEY</code></td>
-            <td>Your Quantish trading API key</td>
+            <td>Polymarket trading API key</td>
+          </tr>
+          <tr>
+            <td><code>KALSHI_API_KEY</code></td>
+            <td>Kalshi trading API key</td>
           </tr>
           <tr>
             <td><code>MCP_SERVER_URL</code></td>
-            <td>Optional: Custom Trading MCP server URL</td>
+            <td>Optional: Custom Polymarket MCP server URL</td>
+          </tr>
+          <tr>
+            <td><code>KALSHI_MCP_URL</code></td>
+            <td>Optional: Custom Kalshi MCP server URL</td>
           </tr>
           <tr>
             <td><code>EXA_API_KEY</code></td>
@@ -222,8 +257,9 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 # OR for OpenRouter
 export OPENROUTER_API_KEY="sk-or-..."
 
-# Plus your trading key
-export QUANTISH_API_KEY="qtsh_..."
+# Trading keys
+export QUANTISH_API_KEY="qtsh_..."  # Polymarket
+export KALSHI_API_KEY="kalshi_..."  # Kalshi (optional)
 quantish</code></pre>
 
       <h2>Configuration File</h2>
@@ -247,7 +283,7 @@ quantish</code></pre>
       </ul>
 
       <div class="footer">
-        <p>© 2025 <a href="https://quantish.live">Quantish Inc.</a> • <a href="https://agent.quantish.live">Agent</a> • <a href="https://github.com/joinQuantish/quantish-agent">GitHub</a> • <a href="https://polyformproject.org/licenses/noncommercial/1.0.0/">PolyForm NC</a></p>
+        <p>Built by <a href="https://quantish.live">Quantish Inc.</a> • <a href="https://github.com/joinQuantish/quantish-agent">GitHub</a> • PolyForm Noncommercial License</p>
       </div>
     </main>
   </div>

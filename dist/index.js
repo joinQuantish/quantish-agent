@@ -13,6 +13,7 @@ import { join } from "path";
 var DEFAULT_TRADING_MCP_URL = "https://quantish-sdk-production.up.railway.app/mcp";
 var DISCOVERY_MCP_URL = "https://quantish.live/mcp";
 var DISCOVERY_MCP_PUBLIC_KEY = "qm_ueQeqrmvZyHtR1zuVbLYkhx0fKyVAuV8";
+var KALSHI_MCP_URL = "https://kalshi-mcp-production-7c2c.up.railway.app/mcp";
 var DEFAULT_MCP_URL = DEFAULT_TRADING_MCP_URL;
 var DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-5-20250929";
 var DEFAULT_OPENROUTER_MODEL = "z-ai/glm-4.7";
@@ -24,6 +25,9 @@ var schema = {
     type: "string"
   },
   quantishApiKey: {
+    type: "string"
+  },
+  kalshiApiKey: {
     type: "string"
   },
   mcpServerUrl: {
@@ -90,6 +94,20 @@ var ConfigManager = class {
    */
   setQuantishApiKey(key) {
     this.conf.set("quantishApiKey", key);
+  }
+  /**
+   * Get the Kalshi API key
+   */
+  getKalshiApiKey() {
+    const envKey = process.env.KALSHI_API_KEY;
+    if (envKey) return envKey;
+    return this.conf.get("kalshiApiKey");
+  }
+  /**
+   * Set the Kalshi API key
+   */
+  setKalshiApiKey(key) {
+    this.conf.set("kalshiApiKey", key);
   }
   /**
    * Get the current LLM provider
@@ -382,17 +400,25 @@ function createMCPClient(baseUrl, apiKey, source = "trading") {
 var MCPClientManager = class {
   discoveryClient;
   tradingClient;
+  kalshiClient;
   toolSourceMap = /* @__PURE__ */ new Map();
   allToolsCache = null;
-  constructor(discoveryUrl, discoveryApiKey, tradingUrl, tradingApiKey) {
+  constructor(discoveryUrl, discoveryApiKey, tradingUrl, tradingApiKey, kalshiUrl, kalshiApiKey) {
     this.discoveryClient = new MCPClient(discoveryUrl, discoveryApiKey, "discovery");
     this.tradingClient = tradingUrl && tradingApiKey ? new MCPClient(tradingUrl, tradingApiKey, "trading") : null;
+    this.kalshiClient = kalshiUrl && kalshiApiKey ? new MCPClient(kalshiUrl, kalshiApiKey, "kalshi") : null;
   }
   /**
-   * Check if trading is enabled
+   * Check if trading is enabled (Polymarket)
    */
   isTradingEnabled() {
     return this.tradingClient !== null;
+  }
+  /**
+   * Check if Kalshi trading is enabled
+   */
+  isKalshiEnabled() {
+    return this.kalshiClient !== null;
   }
   /**
    * Get the discovery client
@@ -405,6 +431,12 @@ var MCPClientManager = class {
    */
   getTradingClient() {
     return this.tradingClient;
+  }
+  /**
+   * Get the Kalshi client (may be null)
+   */
+  getKalshiClient() {
+    return this.kalshiClient;
   }
   /**
    * List all tools from both servers
@@ -433,6 +465,17 @@ var MCPClientManager = class {
         }
       } catch (error2) {
         console.warn("Failed to fetch Trading MCP tools:", error2);
+      }
+    }
+    if (this.kalshiClient) {
+      try {
+        const kalshiTools = await this.kalshiClient.listTools();
+        for (const tool of kalshiTools) {
+          allTools.push({ ...tool, source: "kalshi" });
+          this.toolSourceMap.set(tool.name, "kalshi");
+        }
+      } catch (error2) {
+        console.warn("Failed to fetch Kalshi MCP tools:", error2);
       }
     }
     this.allToolsCache = allTools;
@@ -466,11 +509,21 @@ var MCPClientManager = class {
       if (!this.tradingClient) {
         return {
           success: false,
-          error: `Trading not enabled. Run 'quantish init' to set up trading.`
+          error: `Polymarket trading not enabled. Run 'quantish init' to set up trading.`
         };
       }
       const result = await this.tradingClient.callTool(name, args);
       return { ...result, source: "trading" };
+    }
+    if (source === "kalshi") {
+      if (!this.kalshiClient) {
+        return {
+          success: false,
+          error: `Kalshi trading not enabled. Run 'quantish init' to set up your Kalshi API key.`
+        };
+      }
+      const result = await this.kalshiClient.callTool(name, args);
+      return { ...result, source: "kalshi" };
     }
     return {
       success: false,
@@ -495,8 +548,8 @@ var MCPClientManager = class {
     return { discovery, trading };
   }
 };
-function createMCPClientManager(discoveryUrl, discoveryApiKey, tradingUrl, tradingApiKey) {
-  return new MCPClientManager(discoveryUrl, discoveryApiKey, tradingUrl, tradingApiKey);
+function createMCPClientManager(discoveryUrl, discoveryApiKey, tradingUrl, tradingApiKey, kalshiUrl, kalshiApiKey) {
+  return new MCPClientManager(discoveryUrl, discoveryApiKey, tradingUrl, tradingApiKey, kalshiUrl, kalshiApiKey);
 }
 
 // src/mcp/tools.ts
@@ -528,25 +581,28 @@ function printArchitectureInfo() {
   console.log(chalk.bold.yellow("\n\u{1F4CB} How Quantish Works\n"));
   console.log(chalk.dim("\u2500".repeat(60)));
   console.log();
-  console.log(chalk.bold("Two Capabilities:"));
+  console.log(chalk.bold("Three Capabilities:"));
   console.log();
   console.log(chalk.cyan("\u{1F50D} Market Discovery") + chalk.dim(" (Free, always available)"));
   console.log(chalk.dim("   Search markets across Polymarket, Kalshi, and more"));
   console.log(chalk.dim("   Uses our Discovery MCP with embedded public key"));
   console.log();
   console.log(chalk.magenta("\u{1F4B0} Polymarket Trading") + chalk.dim(" (Optional, your own wallet)"));
-  console.log(chalk.dim("   Trade on Polymarket with a managed wallet"));
+  console.log(chalk.dim("   Trade on Polymarket with a managed Polygon wallet"));
   console.log(chalk.dim("   Uses the Quantish Signing Server"));
   console.log();
+  console.log(chalk.blue("\u{1F5F3}\uFE0F  Kalshi Trading") + chalk.dim(" (Optional, via DFlow on Solana)"));
+  console.log(chalk.dim("   Trade on Kalshi markets via DFlow protocol"));
+  console.log(chalk.dim("   Uses a Solana wallet managed by the Kalshi MCP"));
+  console.log();
   console.log(chalk.bold("How Trading Works:"));
-  console.log(chalk.dim("  1. We create a wallet for you on the Quantish Signing Server"));
-  console.log(chalk.dim("  2. Orders are signed and relayed through Polymarket's system"));
-  console.log(chalk.dim("  3. Gas fees are covered by Polymarket's relayer - FREE!"));
-  console.log(chalk.dim("  4. You control your wallet via your personal API key\n"));
+  console.log(chalk.dim("  Polymarket: Gasless transactions on Polygon, fees covered"));
+  console.log(chalk.dim("  Kalshi: Trade on Solana via DFlow, small SOL fees"));
+  console.log(chalk.dim("  Both: Non-custodial wallets, export keys anytime\n"));
   console.log(chalk.bold("Security:"));
-  console.log(chalk.dim("  \u2022 Your wallet is non-custodial - only you can authorize trades"));
+  console.log(chalk.dim("  \u2022 Your wallets are non-custodial - only you can authorize trades"));
   console.log(chalk.dim("  \u2022 Export your private key anytime with: ") + chalk.cyan("export_private_key"));
-  console.log(chalk.dim("  \u2022 Discovery is read-only - it can't access your wallet"));
+  console.log(chalk.dim("  \u2022 Discovery is read-only - it can't access your wallets"));
   console.log();
   console.log(chalk.dim("\u2500".repeat(60)));
   console.log();
@@ -693,7 +749,48 @@ async function runSetup() {
   } else {
     console.log(chalk.dim("\u2713 No trading key - you can still search markets via Discovery\n"));
   }
-  console.log(chalk.bold("Step 3: Exa API Key (Optional)"));
+  console.log(chalk.bold("Step 3: Kalshi Trading (Optional)"));
+  console.log(chalk.dim("Trade on Kalshi markets via DFlow on Solana."));
+  console.log(chalk.dim("Skip this if you only want Polymarket or market discovery.\n"));
+  let kalshiKey = config.getKalshiApiKey();
+  let skipKalshi = false;
+  if (kalshiKey) {
+    console.log(chalk.dim(`Current Kalshi key: ${kalshiKey.slice(0, 12)}...`));
+    const action = await prompt("Keep current key (Enter), enter new key (n), or disable Kalshi (d): ");
+    if (action.toLowerCase() === "n") {
+      kalshiKey = await prompt("Enter your Kalshi API key: ", true);
+    } else if (action.toLowerCase() === "d") {
+      kalshiKey = void 0;
+      skipKalshi = true;
+    }
+  } else {
+    console.log("Options:");
+    console.log(chalk.dim("  1. Create a new Kalshi account (via agent)"));
+    console.log(chalk.dim("  2. Enter an existing Kalshi API key"));
+    console.log(chalk.dim("  3. Skip Kalshi for now\n"));
+    const choice = await prompt("Choose (1/2/3): ");
+    if (choice === "1") {
+      console.log();
+      console.log(chalk.green("To create a Kalshi account, start the agent and ask:"));
+      console.log(chalk.cyan('  "Create a Kalshi account for me"'));
+      console.log(chalk.dim("\nThe agent will generate a Solana wallet and provide your API key."));
+      console.log(chalk.dim('You can then run "quantish init" again to save the key.\n'));
+      skipKalshi = true;
+    } else if (choice === "2") {
+      kalshiKey = await prompt("Enter your Kalshi API key: ", true);
+    } else {
+      skipKalshi = true;
+    }
+  }
+  if (kalshiKey) {
+    config.setKalshiApiKey(kalshiKey);
+    console.log(chalk.green("\u2713 Kalshi API key saved\n"));
+  } else if (skipKalshi) {
+    console.log(chalk.dim("\u2713 Kalshi disabled - you can set it up later via the agent\n"));
+  } else {
+    console.log(chalk.dim("\u2713 No Kalshi key - you can set it up later\n"));
+  }
+  console.log(chalk.bold("Step 4: Exa API Key (Optional)"));
   console.log(chalk.dim("Powers web search. Get one free at https://dashboard.exa.ai"));
   console.log(chalk.dim("Without this, web search will use DuckDuckGo as fallback.\n"));
   const exaKey = await prompt("Enter your Exa API key (or press Enter to skip): ", true);
@@ -704,7 +801,7 @@ async function runSetup() {
   } else {
     console.log(chalk.dim("Skipped. Web search will use DuckDuckGo.\n"));
   }
-  console.log(chalk.bold("Step 4: Verifying connections..."));
+  console.log(chalk.bold("Step 5: Verifying connections..."));
   try {
     const discoveryClient = createMCPClient(DISCOVERY_MCP_URL, DISCOVERY_MCP_PUBLIC_KEY, "discovery");
     const discoveryResult = await discoveryClient.callTool("get_market_stats", {});
@@ -723,19 +820,37 @@ async function runSetup() {
       const result = await tradingClient.callTool("get_wallet_status", {});
       if (result.success && typeof result.data === "object" && result.data !== null) {
         const data = result.data;
-        console.log(chalk.green("\u2713 Trading MCP connected"));
+        console.log(chalk.green("\u2713 Polymarket MCP connected"));
         console.log(chalk.dim(`  Safe Address: ${data.safeAddress || "Not yet deployed"}`));
         console.log(chalk.dim(`  Status: ${data.status}`));
         console.log(chalk.dim(`  Ready to trade: ${data.isReady ? "Yes" : "Run setup_wallet first"}`));
       } else {
-        console.log(chalk.yellow("\u26A0 Trading MCP: " + (result.error || "Unknown error")));
+        console.log(chalk.yellow("\u26A0 Polymarket MCP: " + (result.error || "Unknown error")));
       }
     } catch (error2) {
-      console.log(chalk.yellow("\u26A0 Could not verify Trading MCP connection."));
+      console.log(chalk.yellow("\u26A0 Could not verify Polymarket MCP connection."));
       console.log(chalk.dim(String(error2)));
     }
   } else {
-    console.log(chalk.dim("\u23ED Trading MCP skipped (no API key)"));
+    console.log(chalk.dim("\u23ED Polymarket MCP skipped (no API key)"));
+  }
+  if (kalshiKey) {
+    try {
+      const kalshiClient = createMCPClient(KALSHI_MCP_URL, kalshiKey, "kalshi");
+      const result = await kalshiClient.callTool("kalshi_get_wallet_info", {});
+      if (result.success && typeof result.data === "object" && result.data !== null) {
+        const data = result.data;
+        console.log(chalk.green("\u2713 Kalshi MCP connected"));
+        console.log(chalk.dim(`  Solana Address: ${data.publicKey || "Unknown"}`));
+      } else {
+        console.log(chalk.yellow("\u26A0 Kalshi MCP: " + (result.error || "Unknown error")));
+      }
+    } catch (error2) {
+      console.log(chalk.yellow("\u26A0 Could not verify Kalshi MCP connection."));
+      console.log(chalk.dim(String(error2)));
+    }
+  } else {
+    console.log(chalk.dim("\u23ED Kalshi MCP skipped (no API key)"));
   }
   console.log();
   console.log(chalk.bold.green("\u{1F389} Setup complete!"));
@@ -5392,9 +5507,9 @@ program.command("config").description("View or edit configuration").option("-s, 
   }
   console.log();
 });
-program.command("tools").description("List available tools").option("-l, --local", "Show only local tools").option("-d, --discovery", "Show only Discovery MCP tools").option("-t, --trading", "Show only Trading MCP tools").action(async (options) => {
+program.command("tools").description("List available tools").option("-l, --local", "Show only local tools").option("-d, --discovery", "Show only Discovery MCP tools").option("-t, --trading", "Show only Trading MCP tools").option("-k, --kalshi", "Show only Kalshi MCP tools").action(async (options) => {
   console.log();
-  const showAll = !options.local && !options.discovery && !options.trading;
+  const showAll = !options.local && !options.discovery && !options.trading && !options.kalshi;
   if (showAll || options.local) {
     console.log(chalk3.bold.blue("\u{1F4C1} Local Tools (coding)"));
     printDivider();
@@ -5428,7 +5543,7 @@ program.command("tools").description("List available tools").option("-l, --local
   if (showAll || options.trading) {
     const config = getConfigManager();
     if (config.isTradingEnabled()) {
-      console.log(chalk3.bold.magenta("\u{1F4B0} Trading MCP Tools (wallet & orders)"));
+      console.log(chalk3.bold.magenta("\u{1F4B0} Polymarket Trading MCP Tools (wallet & orders)"));
       printDivider();
       try {
         const tradingClient = createMCPClient(
@@ -5447,7 +5562,34 @@ program.command("tools").description("List available tools").option("-l, --local
       }
       console.log();
     } else {
-      console.log(chalk3.dim('\u{1F4B0} Trading MCP: Not configured. Run "quantish init" to enable trading.'));
+      console.log(chalk3.dim('\u{1F4B0} Polymarket Trading MCP: Not configured. Run "quantish init" to enable trading.'));
+      console.log();
+    }
+  }
+  if (showAll || options.kalshi) {
+    const config = getConfigManager();
+    const kalshiKey = config.getKalshiApiKey();
+    if (kalshiKey) {
+      console.log(chalk3.bold.yellow("\u{1F3AF} Kalshi MCP Tools (DFlow on Solana)"));
+      printDivider();
+      try {
+        const kalshiClient = createMCPClient(
+          KALSHI_MCP_URL,
+          kalshiKey,
+          "kalshi"
+        );
+        const kalshiTools = await kalshiClient.listTools();
+        for (const tool of kalshiTools) {
+          console.log(chalk3.yellow(`  ${tool.name}`));
+          const desc = tool.description || "";
+          console.log(chalk3.dim(`    ${desc.slice(0, 80)}${desc.length > 80 ? "..." : ""}`));
+        }
+      } catch (error2) {
+        warn("Could not fetch Kalshi tools. Check your API key.");
+      }
+      console.log();
+    } else {
+      console.log(chalk3.dim("\u{1F3AF} Kalshi MCP: Not configured. Set your Kalshi API key to enable."));
       console.log();
     }
   }
@@ -5504,7 +5646,9 @@ function createMCPManager(options) {
     DISCOVERY_MCP_URL,
     DISCOVERY_MCP_PUBLIC_KEY,
     config.isTradingEnabled() ? config.getTradingMcpUrl() : void 0,
-    config.getQuantishApiKey()
+    config.getQuantishApiKey(),
+    config.getKalshiApiKey() ? KALSHI_MCP_URL : void 0,
+    config.getKalshiApiKey()
   );
 }
 async function runInteractiveChat(options = {}) {

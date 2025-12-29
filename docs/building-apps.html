@@ -69,20 +69,27 @@
 
       <h2>The MCP API</h2>
 
-      <p>All applications use the Quantish MCP API. There are two endpoints:</p>
-
-      <div class="callout">
-        <div class="callout-title">Trading API (requires your API key)</div>
-        <pre><code>POST https://quantish-sdk-production.up.railway.app/mcp/execute
-Header: x-api-key: YOUR_QUANTISH_API_KEY</code></pre>
-        <p>Used for: balances, positions, orders, trading</p>
-      </div>
+      <p>All applications use the Quantish MCP API. There are three endpoints:</p>
 
       <div class="callout">
         <div class="callout-title">Discovery API (free, public)</div>
         <pre><code>POST https://quantish.live/mcp/execute
 Header: X-API-Key: qm_ueQeqrmvZyHtR1zuVbLYkhx0fKyVAuV8</code></pre>
-        <p>Used for: searching markets, trending data, arbitrage scanning</p>
+        <p>Used for: searching markets across all platforms, trending data, arbitrage scanning</p>
+      </div>
+
+      <div class="callout">
+        <div class="callout-title">Polymarket Trading API</div>
+        <pre><code>POST https://quantish-sdk-production.up.railway.app/mcp/execute
+Header: x-api-key: YOUR_QUANTISH_API_KEY</code></pre>
+        <p>Used for: Polymarket balances, positions, orders, trading on Polygon</p>
+      </div>
+
+      <div class="callout">
+        <div class="callout-title">Kalshi Trading API</div>
+        <pre><code>POST https://kalshi-mcp-production-7c2c.up.railway.app/mcp
+Header: x-api-key: YOUR_KALSHI_API_KEY</code></pre>
+        <p>Used for: Kalshi balances, positions, orders, trading on Solana via DFlow</p>
       </div>
 
       <h2>Universal Code Template</h2>
@@ -95,27 +102,52 @@ require('dotenv').config();
 // ============================================
 // MCP Configuration
 // ============================================
-const TRADING_MCP_URL = 'https://quantish-sdk-production.up.railway.app/mcp/execute';
 const DISCOVERY_MCP_URL = 'https://quantish.live/mcp/execute';
+const POLYMARKET_MCP_URL = 'https://quantish-sdk-production.up.railway.app/mcp/execute';
+const KALSHI_MCP_URL = 'https://kalshi-mcp-production-7c2c.up.railway.app/mcp';
 const DISCOVERY_API_KEY = 'qm_ueQeqrmvZyHtR1zuVbLYkhx0fKyVAuV8';
 
-// Validate API key
-if (!process.env.QUANTISH_API_KEY) {
-  console.error('ERROR: QUANTISH_API_KEY required');
-  console.error('Get your key at: https://quantish.live');
-  process.exit(1);
+// Validate API keys (at least one trading platform)
+if (!process.env.QUANTISH_API_KEY && !process.env.KALSHI_API_KEY) {
+  console.warn('WARNING: No trading API keys configured');
+  console.warn('Set QUANTISH_API_KEY for Polymarket or KALSHI_API_KEY for Kalshi');
 }
 
 // ============================================
 // MCP Helper Functions
 // ============================================
 
-async function callTradingTool(name, args = {}) {
-  const response = await fetch(TRADING_MCP_URL, {
+async function callPolymarketTool(name, args = {}) {
+  const response = await fetch(POLYMARKET_MCP_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'x-api-key': process.env.QUANTISH_API_KEY
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'tools/call',
+      params: { name, arguments: args },
+      id: Date.now()
+    })
+  });
+  
+  const data = await response.json();
+  if (data.error) throw new Error(data.error.message);
+  
+  try {
+    return JSON.parse(data.result.content[0].text);
+  } catch {
+    return data.result.content[0].text;
+  }
+}
+
+async function callKalshiTool(name, args = {}) {
+  const response = await fetch(KALSHI_MCP_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': process.env.KALSHI_API_KEY
     },
     body: JSON.stringify({
       jsonrpc: '2.0',
@@ -240,7 +272,15 @@ main().catch(console.error);</code></pre>
 
       <h2>Available Tools</h2>
 
-      <h3>Trading Tools (require API key)</h3>
+      <h3>Discovery Tools (free)</h3>
+      <ul>
+        <li><code>search_markets</code> - Find markets by keyword across all platforms</li>
+        <li><code>get_market_details</code> - Full market info</li>
+        <li><code>get_trending_markets</code> - Popular markets</li>
+        <li><code>find_arbitrage</code> - Price discrepancies</li>
+      </ul>
+
+      <h3>Polymarket Trading Tools (QUANTISH_API_KEY)</h3>
       <ul>
         <li><code>get_balances</code> - Wallet balances (USDC, MATIC)</li>
         <li><code>get_positions</code> - Current share holdings</li>
@@ -248,16 +288,17 @@ main().catch(console.error);</code></pre>
         <li><code>cancel_order</code> - Cancel open orders</li>
         <li><code>get_orders</code> - List orders by status</li>
         <li><code>get_orderbook</code> - Bids and asks</li>
-        <li><code>get_price</code> - Midpoint price for a token</li>
         <li><code>transfer_usdc</code> - Send USDC to another address</li>
       </ul>
 
-      <h3>Discovery Tools (free)</h3>
+      <h3>Kalshi Trading Tools (KALSHI_API_KEY)</h3>
       <ul>
-        <li><code>search_markets</code> - Find markets by keyword</li>
-        <li><code>get_market_details</code> - Full market info</li>
-        <li><code>get_trending_markets</code> - Popular markets</li>
-        <li><code>find_arbitrage</code> - Price discrepancies</li>
+        <li><code>kalshi_get_wallet_info</code> - Solana wallet balances</li>
+        <li><code>kalshi_get_positions</code> - Current Kalshi positions</li>
+        <li><code>kalshi_get_quote</code> - Get quote for trade</li>
+        <li><code>kalshi_place_order</code> - Execute trade on Solana</li>
+        <li><code>kalshi_search_markets</code> - Search Kalshi markets</li>
+        <li><code>kalshi_get_market</code> - Market details by ticker</li>
       </ul>
 
       <h2>Best Practices</h2>
@@ -282,7 +323,7 @@ main().catch(console.error);</code></pre>
       </div>
 
       <div class="footer">
-        <p>© 2025 <a href="https://quantish.live">Quantish Inc.</a> • <a href="https://agent.quantish.live">Agent</a> • <a href="https://github.com/joinQuantish/quantish-agent">GitHub</a> • <a href="https://polyformproject.org/licenses/noncommercial/1.0.0/">PolyForm NC</a></p>
+        <p>Built by <a href="https://quantish.live">Quantish Inc.</a> • <a href="https://github.com/joinQuantish/quantish-agent">GitHub</a> • PolyForm Noncommercial License</p>
       </div>
     </main>
   </div>

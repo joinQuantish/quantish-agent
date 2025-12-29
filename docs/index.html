@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Quantish Agent - AI Trading Agent for Polymarket</title>
+  <title>Quantish Agent - AI Trading Agent for Polymarket & Kalshi</title>
   <link rel="stylesheet" href="css/style.css">
-  <meta name="description" content="AI-powered agent for building trading bots on Polymarket. Powered by Claude AI.">
+  <meta name="description" content="AI-powered agent for trading on Polymarket and Kalshi. Powered by Claude AI.">
 </head>
 <body>
   <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
@@ -48,7 +48,7 @@
 
       <h1>Quantish Agent</h1>
       
-      <p>AI-powered agent for building trading bots on Polymarket. Combines <strong>coding tools</strong> (filesystem, shell, git) with <strong>trading tools</strong> (orders, positions, balances) powered by Claude AI.</p>
+      <p>AI-powered agent for trading on <strong>Polymarket</strong> and <strong>Kalshi</strong>. Combines <strong>coding tools</strong> (filesystem, shell, git) with <strong>trading tools</strong> (orders, positions, balances) powered by Claude AI.</p>
 
       <!-- Quick Install -->
       <div class="terminal">
@@ -93,8 +93,8 @@
           <p>See exactly what you're spending per API call with accurate token counting.</p>
         </div>
         <div class="feature-card">
-          <h4>📊 Polymarket Trading</h4>
-          <p>Place orders, check positions, manage your portfolio through natural language.</p>
+          <h4>📊 Multi-Platform Trading</h4>
+          <p>Trade on Polymarket (Polygon) and Kalshi (Solana via DFlow) through natural language.</p>
         </div>
         <div class="feature-card">
           <h4>💻 Full Coding Tools</h4>
@@ -112,16 +112,21 @@
 
       <h2>How It Works</h2>
 
-      <p>Quantish connects to two backend services:</p>
+      <p>Quantish connects to three backend services:</p>
 
       <div class="callout info">
         <div class="callout-title">Discovery MCP</div>
-        <p>Free, read-only access to prediction market data across Polymarket, Kalshi, and more. Uses an embedded public API key - no setup required.</p>
+        <p>Free, read-only access to prediction market data across Polymarket, Kalshi, and Limitless. Uses an embedded public API key - no setup required.</p>
       </div>
 
       <div class="callout warning">
-        <div class="callout-title">Trading MCP</div>
-        <p>Your personal trading wallet for Polymarket. Created during <code>quantish init</code> with your own API key. Gasless trading - Polymarket covers all fees.</p>
+        <div class="callout-title">Polymarket MCP</div>
+        <p>Your personal trading wallet on Polygon. Created during <code>quantish init</code>. Gasless trading - Polymarket covers all fees.</p>
+      </div>
+
+      <div class="callout">
+        <div class="callout-title">Kalshi MCP</div>
+        <p>Trade on CFTC-regulated Kalshi markets via DFlow on Solana. Create an account by asking the agent "Create a Kalshi account for me".</p>
       </div>
 
       <h2>Example Session</h2>
@@ -179,7 +184,7 @@
       </table>
 
       <div class="footer">
-        <p>© 2025 <a href="https://quantish.live">Quantish Inc.</a> • <a href="https://agent.quantish.live">Agent</a> • <a href="https://github.com/joinQuantish/quantish-agent">GitHub</a> • <a href="https://polyformproject.org/licenses/noncommercial/1.0.0/">PolyForm NC</a></p>
+        <p>Built by <a href="https://quantish.live">Quantish Inc.</a> • <a href="https://github.com/joinQuantish/quantish-agent">GitHub</a> • PolyForm Noncommercial License</p>
       </div>
     </main>
   </div>

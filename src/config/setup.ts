@@ -10,7 +10,7 @@
 
 import * as readline from 'readline';
 import chalk from 'chalk';
-import { getConfigManager, DISCOVERY_MCP_URL, DISCOVERY_MCP_PUBLIC_KEY } from './manager.js';
+import { getConfigManager, DISCOVERY_MCP_URL, DISCOVERY_MCP_PUBLIC_KEY, KALSHI_MCP_URL } from './manager.js';
 import { createMCPClient } from '../mcp/index.js';
 
 /**
@@ -44,27 +44,30 @@ function printArchitectureInfo(): void {
   console.log(chalk.dim('─'.repeat(60)));
   console.log();
   
-  console.log(chalk.bold('Two Capabilities:'));
+  console.log(chalk.bold('Three Capabilities:'));
   console.log();
   console.log(chalk.cyan('🔍 Market Discovery') + chalk.dim(' (Free, always available)'));
   console.log(chalk.dim('   Search markets across Polymarket, Kalshi, and more'));
   console.log(chalk.dim('   Uses our Discovery MCP with embedded public key'));
   console.log();
   console.log(chalk.magenta('💰 Polymarket Trading') + chalk.dim(' (Optional, your own wallet)'));
-  console.log(chalk.dim('   Trade on Polymarket with a managed wallet'));
+  console.log(chalk.dim('   Trade on Polymarket with a managed Polygon wallet'));
   console.log(chalk.dim('   Uses the Quantish Signing Server'));
+  console.log();
+  console.log(chalk.blue('🗳️  Kalshi Trading') + chalk.dim(' (Optional, via DFlow on Solana)'));
+  console.log(chalk.dim('   Trade on Kalshi markets via DFlow protocol'));
+  console.log(chalk.dim('   Uses a Solana wallet managed by the Kalshi MCP'));
   console.log();
 
   console.log(chalk.bold('How Trading Works:'));
-  console.log(chalk.dim('  1. We create a wallet for you on the Quantish Signing Server'));
-  console.log(chalk.dim('  2. Orders are signed and relayed through Polymarket\'s system'));
-  console.log(chalk.dim('  3. Gas fees are covered by Polymarket\'s relayer - FREE!'));
-  console.log(chalk.dim('  4. You control your wallet via your personal API key\n'));
+  console.log(chalk.dim('  Polymarket: Gasless transactions on Polygon, fees covered'));
+  console.log(chalk.dim('  Kalshi: Trade on Solana via DFlow, small SOL fees'));
+  console.log(chalk.dim('  Both: Non-custodial wallets, export keys anytime\n'));
 
   console.log(chalk.bold('Security:'));
-  console.log(chalk.dim('  • Your wallet is non-custodial - only you can authorize trades'));
+  console.log(chalk.dim('  • Your wallets are non-custodial - only you can authorize trades'));
   console.log(chalk.dim('  • Export your private key anytime with: ') + chalk.cyan('export_private_key'));
-  console.log(chalk.dim('  • Discovery is read-only - it can\'t access your wallet'));
+  console.log(chalk.dim('  • Discovery is read-only - it can\'t access your wallets'));
   console.log();
   console.log(chalk.dim('─'.repeat(60)));
   console.log();
@@ -249,8 +252,56 @@ export async function runSetup(): Promise<boolean> {
     console.log(chalk.dim('✓ No trading key - you can still search markets via Discovery\n'));
   }
 
-  // Step 3: Optional Exa API Key
-  console.log(chalk.bold('Step 3: Exa API Key (Optional)'));
+  // Step 3: Kalshi Trading API Key (Optional)
+  console.log(chalk.bold('Step 3: Kalshi Trading (Optional)'));
+  console.log(chalk.dim('Trade on Kalshi markets via DFlow on Solana.'));
+  console.log(chalk.dim('Skip this if you only want Polymarket or market discovery.\n'));
+  
+  let kalshiKey = config.getKalshiApiKey();
+  let skipKalshi = false;
+  
+  if (kalshiKey) {
+    console.log(chalk.dim(`Current Kalshi key: ${kalshiKey.slice(0, 12)}...`));
+    const action = await prompt('Keep current key (Enter), enter new key (n), or disable Kalshi (d): ');
+    if (action.toLowerCase() === 'n') {
+      kalshiKey = await prompt('Enter your Kalshi API key: ', true);
+    } else if (action.toLowerCase() === 'd') {
+      kalshiKey = undefined;
+      skipKalshi = true;
+    }
+  } else {
+    console.log('Options:');
+    console.log(chalk.dim('  1. Create a new Kalshi account (via agent)'));
+    console.log(chalk.dim('  2. Enter an existing Kalshi API key'));
+    console.log(chalk.dim('  3. Skip Kalshi for now\n'));
+    
+    const choice = await prompt('Choose (1/2/3): ');
+    
+    if (choice === '1') {
+      console.log();
+      console.log(chalk.green('To create a Kalshi account, start the agent and ask:'));
+      console.log(chalk.cyan('  "Create a Kalshi account for me"'));
+      console.log(chalk.dim('\nThe agent will generate a Solana wallet and provide your API key.'));
+      console.log(chalk.dim('You can then run "quantish init" again to save the key.\n'));
+      skipKalshi = true;
+    } else if (choice === '2') {
+      kalshiKey = await prompt('Enter your Kalshi API key: ', true);
+    } else {
+      skipKalshi = true;
+    }
+  }
+
+  if (kalshiKey) {
+    config.setKalshiApiKey(kalshiKey);
+    console.log(chalk.green('✓ Kalshi API key saved\n'));
+  } else if (skipKalshi) {
+    console.log(chalk.dim('✓ Kalshi disabled - you can set it up later via the agent\n'));
+  } else {
+    console.log(chalk.dim('✓ No Kalshi key - you can set it up later\n'));
+  }
+
+  // Step 4: Optional Exa API Key
+  console.log(chalk.bold('Step 4: Exa API Key (Optional)'));
   console.log(chalk.dim('Powers web search. Get one free at https://dashboard.exa.ai'));
   console.log(chalk.dim('Without this, web search will use DuckDuckGo as fallback.\n'));
   
@@ -264,8 +315,8 @@ export async function runSetup(): Promise<boolean> {
     console.log(chalk.dim('Skipped. Web search will use DuckDuckGo.\n'));
   }
 
-  // Step 4: Verify connections
-  console.log(chalk.bold('Step 4: Verifying connections...'));
+  // Step 5: Verify connections
+  console.log(chalk.bold('Step 5: Verifying connections...'));
   
   // Always verify Discovery MCP (free, embedded key)
   try {
@@ -281,7 +332,7 @@ export async function runSetup(): Promise<boolean> {
     console.log(chalk.dim(String(error)));
   }
   
-  // Verify Trading MCP if enabled
+  // Verify Polymarket Trading MCP if enabled
   if (quantishKey) {
     try {
       const tradingClient = createMCPClient(config.getTradingMcpUrl(), quantishKey, 'trading');
@@ -289,19 +340,40 @@ export async function runSetup(): Promise<boolean> {
       
       if (result.success && typeof result.data === 'object' && result.data !== null) {
         const data = result.data as Record<string, unknown>;
-        console.log(chalk.green('✓ Trading MCP connected'));
+        console.log(chalk.green('✓ Polymarket MCP connected'));
         console.log(chalk.dim(`  Safe Address: ${data.safeAddress || 'Not yet deployed'}`));
         console.log(chalk.dim(`  Status: ${data.status}`));
         console.log(chalk.dim(`  Ready to trade: ${data.isReady ? 'Yes' : 'Run setup_wallet first'}`));
       } else {
-        console.log(chalk.yellow('⚠ Trading MCP: ' + (result.error || 'Unknown error')));
+        console.log(chalk.yellow('⚠ Polymarket MCP: ' + (result.error || 'Unknown error')));
       }
     } catch (error) {
-      console.log(chalk.yellow('⚠ Could not verify Trading MCP connection.'));
+      console.log(chalk.yellow('⚠ Could not verify Polymarket MCP connection.'));
       console.log(chalk.dim(String(error)));
     }
   } else {
-    console.log(chalk.dim('⏭ Trading MCP skipped (no API key)'));
+    console.log(chalk.dim('⏭ Polymarket MCP skipped (no API key)'));
+  }
+  
+  // Verify Kalshi MCP if enabled
+  if (kalshiKey) {
+    try {
+      const kalshiClient = createMCPClient(KALSHI_MCP_URL, kalshiKey, 'kalshi');
+      const result = await kalshiClient.callTool('kalshi_get_wallet_info', {});
+      
+      if (result.success && typeof result.data === 'object' && result.data !== null) {
+        const data = result.data as Record<string, unknown>;
+        console.log(chalk.green('✓ Kalshi MCP connected'));
+        console.log(chalk.dim(`  Solana Address: ${data.publicKey || 'Unknown'}`));
+      } else {
+        console.log(chalk.yellow('⚠ Kalshi MCP: ' + (result.error || 'Unknown error')));
+      }
+    } catch (error) {
+      console.log(chalk.yellow('⚠ Could not verify Kalshi MCP connection.'));
+      console.log(chalk.dim(String(error)));
+    }
+  } else {
+    console.log(chalk.dim('⏭ Kalshi MCP skipped (no API key)'));
   }
 
   // Done!

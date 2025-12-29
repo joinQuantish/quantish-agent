@@ -28,7 +28,8 @@
       <div class="nav-section">Resources</div>
       <ul class="nav-tree">
         <li><a href="https://github.com/joinQuantish/quantish-agent" target="_blank"><span class="nav-prefix">○</span> Agent GitHub</a></li>
-        <li><a href="https://github.com/joinQuantish/quantish-server" target="_blank"><span class="nav-prefix">○</span> Server GitHub</a></li>
+        <li><a href="https://github.com/joinQuantish/quantish-server" target="_blank"><span class="nav-prefix">○</span> Polymarket Server</a></li>
+        <li><a href="https://github.com/joinQuantish/kalshi-mcp" target="_blank"><span class="nav-prefix">○</span> Kalshi Server</a></li>
         <li><a href="https://www.npmjs.com/package/@quantish/agent" target="_blank"><span class="nav-prefix">○</span> NPM</a></li>
         <li><a href="https://quantish.live" target="_blank"><span class="nav-prefix">○</span> quantish.live</a></li>
       </ul>
@@ -37,7 +38,7 @@
     <main class="main">
       <h1>Self-Hosting</h1>
       
-      <p>Run your own Trading MCP server for full control over your wallet keys and infrastructure.</p>
+      <p>Run your own Trading MCP servers for full control over your wallet keys and infrastructure. We provide packages for both Polymarket (Polygon) and Kalshi (Solana via DFlow).</p>
 
       <div class="info-box">
         <strong>⚡ Why Self-Host?</strong>
@@ -49,45 +50,28 @@
         </ul>
       </div>
 
-      <h2>Configure Custom Server URL</h2>
+      <h2>Configure Custom Server URLs</h2>
 
-      <p>Before deploying your own server, you can configure the CLI to point to any Trading MCP endpoint:</p>
+      <p>Configure the CLI to point to your own Trading MCP servers:</p>
 
-      <h3>Option 1: CLI Command</h3>
+      <h3>Environment Variables</h3>
 
-      <div class="terminal">
-        <div class="terminal-header">
-          <span class="terminal-dot red"></span>
-          <span class="terminal-dot yellow"></span>
-          <span class="terminal-dot green"></span>
-        </div>
-        <div class="terminal-body">
-          <div class="terminal-line">
-            <span class="terminal-prompt">$</span>
-            <span class="terminal-command"> quantish config --server https://your-server.com/mcp</span>
-          </div>
-          <div class="terminal-line terminal-success">✓ Trading MCP server URL set to: https://your-server.com/mcp</div>
-        </div>
-      </div>
+      <pre><code># Polymarket server
+export MCP_SERVER_URL=https://your-polymarket-server.com/mcp
 
-      <h3>Option 2: Environment Variable</h3>
+# Kalshi server
+export KALSHI_MCP_URL=https://your-kalshi-server.com/mcp</code></pre>
 
-      <p>Set the <code>MCP_SERVER_URL</code> environment variable (takes precedence over config):</p>
-
-      <pre><code># In your shell profile (~/.zshrc, ~/.bashrc)
-export MCP_SERVER_URL=https://your-server.com/mcp
-
-# Or in a .env file for your project
-MCP_SERVER_URL=https://your-server.com/mcp</code></pre>
-
-      <h3>Option 3: Config File</h3>
+      <h3>Config File</h3>
 
       <p>Edit <code>~/.quantish/config.json</code> directly:</p>
 
       <pre><code>{
   "anthropicApiKey": "sk-ant-...",
-  "quantishApiKey": "your-custom-key",
-  "mcpServerUrl": "https://your-server.com/mcp",
+  "quantishApiKey": "your-polymarket-key",
+  "kalshiApiKey": "your-kalshi-key",
+  "mcpServerUrl": "https://your-polymarket-server.com/mcp",
+  "kalshiMcpUrl": "https://your-kalshi-server.com/mcp",
   "model": "claude-sonnet-4-5-20250929"
 }</code></pre>
 
@@ -337,6 +321,76 @@ app.listen(3000);</code></pre>
         <p>Never commit your Polymarket credentials or encryption keys to version control. Always use environment variables or a secrets manager.</p>
       </div>
 
+      <h2>Kalshi Server (@quantish/kalshi-server)</h2>
+
+      <p>Self-host a Kalshi MCP server for trading on Kalshi via DFlow on Solana:</p>
+
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line">
+            <span class="terminal-prompt">$</span>
+            <span class="terminal-command"> npm install @quantish/kalshi-server</span>
+          </div>
+        </div>
+      </div>
+
+      <p>Source code: <a href="https://github.com/joinQuantish/kalshi-mcp" target="_blank">github.com/joinQuantish/kalshi-mcp</a></p>
+
+      <h3>Kalshi Server Environment Variables</h3>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Variable</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>DATABASE_URL</code></td>
+            <td>PostgreSQL connection string</td>
+          </tr>
+          <tr>
+            <td><code>ENCRYPTION_KEY</code></td>
+            <td>64-character hex string for wallet encryption</td>
+          </tr>
+          <tr>
+            <td><code>JWT_SECRET</code></td>
+            <td>Secret for API key generation</td>
+          </tr>
+          <tr>
+            <td><code>DFLOW_API_KEY</code></td>
+            <td>DFlow API key for market operations</td>
+          </tr>
+          <tr>
+            <td><code>SOLANA_RPC_URL</code></td>
+            <td>Solana RPC endpoint (e.g., Helius, Quicknode)</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Generate Encryption Key</h3>
+
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line">
+            <span class="terminal-prompt">$</span>
+            <span class="terminal-command"> node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"</span>
+          </div>
+          <div class="terminal-line terminal-output">a1b2c3d4e5f6... (64 characters)</div>
+        </div>
+      </div>
+
       <h2>Architecture Overview</h2>
 
       <pre><code>┌─────────────────────────────────────────────────────────┐
@@ -347,11 +401,16 @@ app.listen(3000);</code></pre>
 │       │                                                  │
 │       ├── Local Tools (filesystem, shell, git)           │
 │       │                                                  │
-│       └── Trading MCP ──► Your Server                    │
+│       ├── Polymarket MCP ──► Your Polymarket Server      │
+│       │                          │                       │
+│       │                          ├── PostgreSQL          │
+│       │                          └── Polymarket API      │
+│       │                                                  │
+│       └── Kalshi MCP ──► Your Kalshi Server              │
 │                              │                           │
-│                              ├── PostgreSQL (users/keys) │
-│                              │                           │
-│                              └── Polymarket API          │
+│                              ├── PostgreSQL              │
+│                              ├── DFlow API               │
+│                              └── Solana RPC              │
 │                                                          │
 └─────────────────────────────────────────────────────────┘
 

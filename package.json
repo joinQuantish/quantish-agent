@@ -1,7 +1,7 @@
 {
   "name": "@quantish/agent",
-  "version": "0.1.25",
-  "description": "AI-powered agent for building trading bots on Polymarket",
+  "version": "0.1.26",
+  "description": "AI-powered agent for trading on Polymarket and Kalshi",
   "type": "module",
   "bin": {
     "quantish": "./dist/index.js"
@@ -20,6 +20,7 @@
   },
   "keywords": [
     "polymarket",
+    "kalshi",
     "trading",
     "cli",
     "ai",
@@ -28,6 +29,9 @@
     "mcp",
     "prediction-markets",
     "polymarket-trading",
+    "kalshi-trading",
+    "solana",
+    "dflow",
     "ai-agent",
     "trading-bot"
   ],

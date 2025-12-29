@@ -12,7 +12,7 @@ import React from 'react';
 import { render } from 'ink';
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { getConfigManager, runSetup, ensureConfigured, DISCOVERY_MCP_URL, DISCOVERY_MCP_PUBLIC_KEY } from './config/index.js';
+import { getConfigManager, runSetup, ensureConfigured, DISCOVERY_MCP_URL, DISCOVERY_MCP_PUBLIC_KEY, KALSHI_MCP_URL } from './config/index.js';
 import { createMCPClient, createMCPClientManager, MCPClientManager } from './mcp/index.js';
 import { createAgent } from './agent/index.js';
 import { localTools, processManager } from './tools/index.js';
@@ -161,9 +161,10 @@ program
   .option('-l, --local', 'Show only local tools')
   .option('-d, --discovery', 'Show only Discovery MCP tools')
   .option('-t, --trading', 'Show only Trading MCP tools')
+  .option('-k, --kalshi', 'Show only Kalshi MCP tools')
   .action(async (options) => {
     console.log();
-    const showAll = !options.local && !options.discovery && !options.trading;
+    const showAll = !options.local && !options.discovery && !options.trading && !options.kalshi;
     
     // Local tools
     if (showAll || options.local) {
@@ -201,11 +202,11 @@ program
       console.log();
     }
 
-    // Trading MCP tools (requires API key)
+    // Trading MCP tools (Polymarket - requires API key)
     if (showAll || options.trading) {
       const config = getConfigManager();
       if (config.isTradingEnabled()) {
-        console.log(chalk.bold.magenta('💰 Trading MCP Tools (wallet & orders)'));
+        console.log(chalk.bold.magenta('💰 Polymarket Trading MCP Tools (wallet & orders)'));
         ui.printDivider();
         
         try {
@@ -226,7 +227,38 @@ program
         }
         console.log();
       } else {
-        console.log(chalk.dim('💰 Trading MCP: Not configured. Run "quantish init" to enable trading.'));
+        console.log(chalk.dim('💰 Polymarket Trading MCP: Not configured. Run "quantish init" to enable trading.'));
+        console.log();
+      }
+    }
+
+    // Kalshi MCP tools (requires Kalshi API key)
+    if (showAll || options.kalshi) {
+      const config = getConfigManager();
+      const kalshiKey = config.getKalshiApiKey();
+      if (kalshiKey) {
+        console.log(chalk.bold.yellow('🎯 Kalshi MCP Tools (DFlow on Solana)'));
+        ui.printDivider();
+        
+        try {
+          const kalshiClient = createMCPClient(
+            KALSHI_MCP_URL,
+            kalshiKey,
+            'kalshi'
+          );
+          const kalshiTools = await kalshiClient.listTools();
+          
+          for (const tool of kalshiTools) {
+            console.log(chalk.yellow(`  ${tool.name}`));
+            const desc = tool.description || '';
+            console.log(chalk.dim(`    ${desc.slice(0, 80)}${desc.length > 80 ? '...' : ''}`));
+          }
+        } catch (error) {
+          ui.warn('Could not fetch Kalshi tools. Check your API key.');
+        }
+        console.log();
+      } else {
+        console.log(chalk.dim('🎯 Kalshi MCP: Not configured. Set your Kalshi API key to enable.'));
         console.log();
       }
     }
@@ -315,12 +347,15 @@ function createMCPManager(options: ChatOptions): MCPClientManager | undefined {
   const config = getConfigManager();
   
   // Always connect to Discovery MCP (free, embedded key)
-  // Optionally connect to Trading MCP if user has a key
+  // Optionally connect to Trading MCP (Polymarket) if user has a key
+  // Optionally connect to Kalshi MCP if user has a Kalshi key
   return createMCPClientManager(
     DISCOVERY_MCP_URL,
     DISCOVERY_MCP_PUBLIC_KEY,
     config.isTradingEnabled() ? config.getTradingMcpUrl() : undefined,
-    config.getQuantishApiKey()
+    config.getQuantishApiKey(),
+    config.getKalshiApiKey() ? KALSHI_MCP_URL : undefined,
+    config.getKalshiApiKey()
   );
 }
 
