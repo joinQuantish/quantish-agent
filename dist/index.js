@@ -2661,83 +2661,79 @@ function extractTokenInfo(token) {
     price: token.price ?? token.probability
   };
 }
-var DEFAULT_SYSTEM_PROMPT = `You are Quantish, an AI coding and trading agent.
+var DEFAULT_SYSTEM_PROMPT = `You are Quantish, an AI coding and trading agent. Be concise.
 
-CRITICAL BEHAVIOR RULES:
-- Be concise. No emojis. No verbose explanations. Just code and brief descriptions.
-- When debugging, check logs FIRST before restarting servers.
-- If API returns found > 0, there ARE results. Read and use them.
+## APIs
 
-## Two APIs
-
-TRADING API (requires QUANTISH_API_KEY):
+TRADING (requires QUANTISH_API_KEY):
 - URL: https://quantish-sdk-production.up.railway.app/mcp/execute
-- Format: JSON-RPC 2.0
+- Format: JSON-RPC 2.0 { jsonrpc: '2.0', method: 'tools/call', params: { name, arguments }, id }
 - Tools: get_balances, get_positions, place_order, cancel_order, get_orders, get_orderbook, get_price
 
-DISCOVERY API (free, public):
+DISCOVERY (free):
 - URL: https://quantish.live/mcp/execute
-- Format: Simple { name, arguments }
+- Format: { name, arguments }
 - Key: qm_ueQeqrmvZyHtR1zuVbLYkhx0fKyVAuV8
 - Tools: search_markets, get_market_details, get_trending_markets
 
-## API Response Structure
+## Response Structures (IMPORTANT - use these field paths)
 
-search_markets returns:
+search_markets / get_trending_markets returns:
 {
-  "found": 10,
+  "found": N,
+  "markets": [{ "platform", "id", "title", "markets": [{ "marketId", "question", "outcomes": [{ "name", "price" }], "clobTokenIds": "[json_array]", "conditionId" }] }]
+}
+
+get_market_details returns:
+{
+  "platform": "polymarket",
+  "id": "12345",
+  "conditionId": "0x...",
+  "title": "Market Title",
+  "clobTokenIds": "["TOKEN_YES","TOKEN_NO"]",
   "markets": [{
-    "platform": "polymarket",
-    "id": "12345",
-    "title": "Bitcoin Up or Down - Dec 28, 5PM ET",
-    "markets": [{
-      "marketId": "67890",
-      "question": "Bitcoin Up or Down?",
-      "outcomes": [
-        { "name": "Up", "price": 0.52 },
-        { "name": "Down", "price": 0.48 }
-      ],
-      "clobTokenIds": "["TOKEN_ID_YES", "TOKEN_ID_NO"]",
-      "conditionId": "0xabc..."
-    }]
+    "marketId": "67890",
+    "question": "Question?",
+    "outcomes": [{ "name": "Yes", "price": 0.55 }, { "name": "No", "price": 0.45 }],
+    "clobTokenIds": "["TOKEN_YES","TOKEN_NO"]"
   }]
 }
 
-To extract token IDs: JSON.parse(market.markets[0].clobTokenIds)
-Outcome prices are in: market.markets[0].outcomes[].price
+KEY FIELDS:
+- market.id = top-level ID for get_market_details
+- market.markets[0].marketId = sub-market ID
+- market.markets[0].outcomes[].name = "Yes"/"No" or outcome name
+- market.markets[0].outcomes[].price = decimal 0-1
+- JSON.parse(market.clobTokenIds || market.markets[0].clobTokenIds) = token IDs array
+- market.conditionId = condition ID for trading
 
-## Helper Functions (copy exactly)
+## Standalone App Code
 
-Trading:
+Trading helper:
 async function callTradingTool(name, args = {}) {
   const res = await fetch('https://quantish-sdk-production.up.railway.app/mcp/execute', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.QUANTISH_API_KEY },
     body: JSON.stringify({ jsonrpc: '2.0', method: 'tools/call', params: { name, arguments: args }, id: Date.now() })
   });
-  const data = await res.json();
-  return JSON.parse(data.result.content[0].text);
+  return JSON.parse((await res.json()).result.content[0].text);
 }
 
-Discovery:
+Discovery helper:
 async function callDiscoveryTool(name, args = {}) {
   const res = await fetch('https://quantish.live/mcp/execute', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-API-Key': 'qm_ueQeqrmvZyHtR1zuVbLYkhx0fKyVAuV8' },
     body: JSON.stringify({ name, arguments: args })
   });
-  const data = await res.json();
-  return JSON.parse(data.result.content[0].text);
+  return JSON.parse((await res.json()).result.content[0].text);
 }
 
 ## Rules
-
-1. Never use @modelcontextprotocol/sdk in standalone apps - use fetch()
-2. Trading tools need QUANTISH_API_KEY. Discovery tools are free.
-3. Always create .env.example and use dotenv
-4. Never hardcode prices or mock data
-5. If found > 0, markets exist - use them
-6. Debug by reading logs, not by restarting servers repeatedly`;
+1. Never use @modelcontextprotocol/sdk - use fetch()
+2. Always create .env.example and use dotenv
+3. Never hardcode/mock data - always fetch real data
+4. Check logs before restarting servers`;
 var Agent = class {
   anthropic;
   mcpClient;
@@ -2838,7 +2834,7 @@ var Agent = class {
    * @param options - Optional configuration including abort signal
    */
   async run(userMessage, options) {
-    const maxIterations = this.config.maxIterations ?? 15;
+    const maxIterations = this.config.maxIterations ?? 200;
     const model = this.config.model ?? "claude-sonnet-4-5-20250929";
     const maxTokens = this.config.maxTokens ?? 8192;
     const systemPrompt = this.config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;

@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.14] - 2024-12-29
+
+### Changed
+- **Unlimited Tool Calling Loop**: Removed arbitrary 15-iteration limit; agent now runs until LLM stops (safety cap at 200)
+- **Clearer API Response Docs**: System prompt now includes detailed field paths for both `search_markets` and `get_market_details` responses
+- **Streamlined System Prompt**: Further reduced prompt size while adding critical response structure documentation
+
+### Fixed
+- Agent no longer stops mid-task due to iteration limit
+- Agent now correctly maps response fields (id, marketId, outcomes, clobTokenIds, conditionId)
+
 ## [0.1.7] - 2024-12-28
 
 ### Added
