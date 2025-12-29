@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.15] - 2024-12-29
+
+### Added
+- **`edit_lines` Tool**: New line-targeted editing tool that uses line numbers instead of full string matching
+  - Much more token-efficient: sends `start_line`, `end_line`, `new_content` instead of full `old_string`
+  - Agent guided to prefer `edit_lines` over `edit_file` when line numbers are known
+
+### Changed
+- Tool descriptions updated to guide agent toward more efficient editing patterns
+
 ## [0.1.14] - 2024-12-29
 
 ### Changed

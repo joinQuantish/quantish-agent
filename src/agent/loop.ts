@@ -398,7 +398,8 @@ async function callDiscoveryTool(name, args = {}) {
 1. Never use @modelcontextprotocol/sdk - use fetch()
 2. Always create .env.example and use dotenv
 3. Never hardcode/mock data - always fetch real data
-4. Check logs before restarting servers`;
+4. Check logs before restarting servers
+5. PREFER edit_lines over edit_file - uses line numbers, saves tokens`;
 
 
 export class Agent {

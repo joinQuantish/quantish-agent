@@ -780,6 +780,41 @@ async function fileExists(filePath) {
     return { success: false, error: `Failed to check file: ${error2 instanceof Error ? error2.message : String(error2)}` };
   }
 }
+async function editLines(filePath, startLine, endLine, newContent) {
+  try {
+    const resolvedPath = path.resolve(filePath);
+    if (!existsSync(resolvedPath)) {
+      return { success: false, error: `File not found: ${filePath}` };
+    }
+    const content = await fs.readFile(resolvedPath, "utf-8");
+    const lines = content.split("\n");
+    if (startLine < 1 || endLine < startLine || startLine > lines.length) {
+      return {
+        success: false,
+        error: `Invalid line range: ${startLine}-${endLine}. File has ${lines.length} lines.`
+      };
+    }
+    const startIdx = startLine - 1;
+    const endIdx = Math.min(endLine, lines.length);
+    const newLines = newContent.split("\n");
+    const beforeLines = lines.slice(0, startIdx);
+    const afterLines = lines.slice(endIdx);
+    const resultLines = [...beforeLines, ...newLines, ...afterLines];
+    const newFileContent = resultLines.join("\n");
+    await fs.writeFile(resolvedPath, newFileContent, "utf-8");
+    return {
+      success: true,
+      data: {
+        path: resolvedPath,
+        linesReplaced: endIdx - startIdx,
+        newLinesInserted: newLines.length,
+        totalLines: resultLines.length
+      }
+    };
+  } catch (error2) {
+    return { success: false, error: `Failed to edit lines: ${error2 instanceof Error ? error2.message : String(error2)}` };
+  }
+}
 async function editFile(filePath, oldString, newString, options) {
   try {
     const resolvedPath = path.resolve(filePath);
@@ -898,8 +933,34 @@ var filesystemTools = [
     }
   },
   {
+    name: "edit_lines",
+    description: "Edit specific lines in a file by line number. MORE EFFICIENT than edit_file - use this when you know the line numbers from read_file. Only sends line numbers + new content, not full old content.",
+    input_schema: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description: "The path to the file to edit"
+        },
+        start_line: {
+          type: "number",
+          description: "The first line number to replace (1-based, inclusive)"
+        },
+        end_line: {
+          type: "number",
+          description: "The last line number to replace (1-based, inclusive)"
+        },
+        new_content: {
+          type: "string",
+          description: "The new content to insert (replaces lines start_line through end_line)"
+        }
+      },
+      required: ["path", "start_line", "end_line", "new_content"]
+    }
+  },
+  {
     name: "edit_file",
-    description: "Edit a file by replacing a specific string with new content. Safer than write_file as it only modifies the targeted section. The old_string must match exactly (including whitespace).",
+    description: "Edit a file by replacing a specific string with new content. Use edit_lines instead when you know line numbers - it uses fewer tokens.",
     input_schema: {
       type: "object",
       properties: {
@@ -1042,6 +1103,13 @@ async function executeFilesystemTool(name, args) {
       return deleteFile(args.path);
     case "file_exists":
       return fileExists(args.path);
+    case "edit_lines":
+      return editLines(
+        args.path,
+        args.start_line,
+        args.end_line,
+        args.new_content
+      );
     case "edit_file":
       return editFile(
         args.path,
@@ -2733,7 +2801,8 @@ async function callDiscoveryTool(name, args = {}) {
 1. Never use @modelcontextprotocol/sdk - use fetch()
 2. Always create .env.example and use dotenv
 3. Never hardcode/mock data - always fetch real data
-4. Check logs before restarting servers`;
+4. Check logs before restarting servers
+5. PREFER edit_lines over edit_file - uses line numbers, saves tokens`;
 var Agent = class {
   anthropic;
   mcpClient;
