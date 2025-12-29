@@ -935,7 +935,7 @@ export class Agent {
    */
   async run(userMessage: string, options?: { signal?: AbortSignal }): Promise<AgentResult> {
     const maxIterations = this.config.maxIterations ?? 15;
-    const model = this.config.model ?? 'claude-sonnet-4-20250514';
+    const model = this.config.model ?? 'claude-sonnet-4-5-20250929';
     const maxTokens = this.config.maxTokens ?? 8192;
     const systemPrompt = this.config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
     const useStreaming = this.config.streaming ?? true;
@@ -1292,7 +1292,7 @@ export class Agent {
    * Count tokens in current conversation (uses Anthropic's token counting API)
    */
   async countTokens(): Promise<number> {
-    const model = this.config.model ?? 'claude-sonnet-4-20250514';
+    const model = this.config.model ?? 'claude-sonnet-4-5-20250929';
     const systemPrompt = this.config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
     const allTools = await this.getAllTools();
 
@@ -1373,7 +1373,7 @@ export class Agent {
    * @returns Object with original/new token counts and the summary
    */
   async compactHistory(): Promise<CompactionResult> {
-    const model = this.config.model ?? 'claude-sonnet-4-20250514';
+    const model = this.config.model ?? 'claude-sonnet-4-5-20250929';
     const systemPrompt = this.config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
     const allTools = await this.getAllTools();
 

@@ -118,7 +118,7 @@ program
         console.log(`QUANTISH_API_KEY=${all.quantishApiKey}`);
       }
       console.log(`QUANTISH_MCP_URL=${all.mcpServerUrl}`);
-      console.log(`QUANTISH_MODEL=${all.model || 'claude-sonnet-4-20250514'}`);
+      console.log(`QUANTISH_MODEL=${all.model || 'claude-sonnet-4-5-20250929'}`);
       console.log();
       console.log(chalk.dim('# Discovery MCP (public, read-only market data)'));
       console.log(`QUANTISH_DISCOVERY_URL=https://quantish.live/mcp`);
@@ -145,7 +145,7 @@ program
     }
     
     ui.tableRow('MCP Server URL', all.mcpServerUrl);
-    ui.tableRow('Model', all.model || 'claude-sonnet-4-20250514');
+    ui.tableRow('Model', all.model || 'claude-sonnet-4-5-20250929');
     ui.printDivider();
     console.log(chalk.dim(`Config file: ${config.getConfigPath()}`));
     console.log();

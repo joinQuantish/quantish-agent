@@ -27,7 +27,7 @@ var schema = {
   },
   model: {
     type: "string",
-    default: "claude-sonnet-4-20250514"
+    default: "claude-sonnet-4-5-20250929"
   }
 };
 var ConfigManager = class {
@@ -111,7 +111,7 @@ var ConfigManager = class {
    * Get the model to use
    */
   getModel() {
-    return this.conf.get("model") ?? "claude-sonnet-4-20250514";
+    return this.conf.get("model") ?? "claude-sonnet-4-5-20250929";
   }
   /**
    * Set the model to use
@@ -2357,10 +2357,10 @@ async function compactConversation(anthropic, history, model, systemPrompt, tool
 
 // src/agent/pricing.ts
 var MODELS = {
-  "claude-opus-4-20250514": {
-    id: "claude-opus-4-20250514",
-    name: "opus-4",
-    displayName: "Claude Opus 4",
+  "claude-opus-4-5-20251101": {
+    id: "claude-opus-4-5-20251101",
+    name: "opus-4.5",
+    displayName: "Claude Opus 4.5",
     pricing: {
       inputPerMTok: 15,
       outputPerMTok: 75,
@@ -2372,10 +2372,10 @@ var MODELS = {
     contextWindow: 2e5,
     description: "Most capable model. Best for complex reasoning and creative tasks."
   },
-  "claude-sonnet-4-20250514": {
-    id: "claude-sonnet-4-20250514",
-    name: "sonnet-4",
-    displayName: "Claude Sonnet 4",
+  "claude-sonnet-4-5-20250929": {
+    id: "claude-sonnet-4-5-20250929",
+    name: "sonnet-4.5",
+    displayName: "Claude Sonnet 4.5",
     pricing: {
       inputPerMTok: 3,
       outputPerMTok: 15,
@@ -2387,30 +2387,30 @@ var MODELS = {
     contextWindow: 2e5,
     description: "Balanced performance and cost. Great for most coding and trading tasks."
   },
-  "claude-3-5-haiku-20241022": {
-    id: "claude-3-5-haiku-20241022",
-    name: "haiku-3.5",
-    displayName: "Claude Haiku 3.5",
+  "claude-haiku-4-5-20251001": {
+    id: "claude-haiku-4-5-20251001",
+    name: "haiku-4.5",
+    displayName: "Claude Haiku 4.5",
     pricing: {
-      inputPerMTok: 0.8,
-      outputPerMTok: 4,
-      cacheWritePerMTok: 1,
+      inputPerMTok: 1,
+      outputPerMTok: 5,
+      cacheWritePerMTok: 1.25,
       // 1.25x input
-      cacheReadPerMTok: 0.08
+      cacheReadPerMTok: 0.1
       // 0.1x input
     },
     contextWindow: 2e5,
     description: "Fastest and most economical. Good for simple tasks and high volume."
   }
 };
-var DEFAULT_MODEL = "claude-sonnet-4-20250514";
+var DEFAULT_MODEL = "claude-sonnet-4-5-20250929";
 var MODEL_ALIASES = {
-  "opus": "claude-opus-4-20250514",
-  "opus-4": "claude-opus-4-20250514",
-  "sonnet": "claude-sonnet-4-20250514",
-  "sonnet-4": "claude-sonnet-4-20250514",
-  "haiku": "claude-3-5-haiku-20241022",
-  "haiku-3.5": "claude-3-5-haiku-20241022"
+  "opus": "claude-opus-4-5-20251101",
+  "opus-4.5": "claude-opus-4-5-20251101",
+  "sonnet": "claude-sonnet-4-5-20250929",
+  "sonnet-4.5": "claude-sonnet-4-5-20250929",
+  "haiku": "claude-haiku-4-5-20251001",
+  "haiku-4.5": "claude-haiku-4-5-20251001"
 };
 function resolveModelId(nameOrAlias) {
   const lower = nameOrAlias.toLowerCase();
@@ -3246,7 +3246,7 @@ var Agent = class {
    */
   async run(userMessage, options) {
     const maxIterations = this.config.maxIterations ?? 15;
-    const model = this.config.model ?? "claude-sonnet-4-20250514";
+    const model = this.config.model ?? "claude-sonnet-4-5-20250929";
     const maxTokens = this.config.maxTokens ?? 8192;
     const systemPrompt = this.config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
     const useStreaming = this.config.streaming ?? true;
@@ -3506,7 +3506,7 @@ ${userMessage}`;
    * Count tokens in current conversation (uses Anthropic's token counting API)
    */
   async countTokens() {
-    const model = this.config.model ?? "claude-sonnet-4-20250514";
+    const model = this.config.model ?? "claude-sonnet-4-5-20250929";
     const systemPrompt = this.config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
     const allTools = await this.getAllTools();
     try {
@@ -3577,7 +3577,7 @@ ${userMessage}`;
    * @returns Object with original/new token counts and the summary
    */
   async compactHistory() {
-    const model = this.config.model ?? "claude-sonnet-4-20250514";
+    const model = this.config.model ?? "claude-sonnet-4-5-20250929";
     const systemPrompt = this.config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
     const allTools = await this.getAllTools();
     if (this.conversationHistory.length < 2) {
@@ -4313,7 +4313,7 @@ program.command("config").description("View or edit configuration").option("-s, 
       console.log(`QUANTISH_API_KEY=${all2.quantishApiKey}`);
     }
     console.log(`QUANTISH_MCP_URL=${all2.mcpServerUrl}`);
-    console.log(`QUANTISH_MODEL=${all2.model || "claude-sonnet-4-20250514"}`);
+    console.log(`QUANTISH_MODEL=${all2.model || "claude-sonnet-4-5-20250929"}`);
     console.log();
     console.log(chalk3.dim("# Discovery MCP (public, read-only market data)"));
     console.log(`QUANTISH_DISCOVERY_URL=https://quantish.live/mcp`);
@@ -4334,7 +4334,7 @@ program.command("config").description("View or edit configuration").option("-s, 
     tableRow("Quantish API Key", all.quantishApiKey ? `${all.quantishApiKey.slice(0, 12)}...` : chalk3.dim("Not set"));
   }
   tableRow("MCP Server URL", all.mcpServerUrl);
-  tableRow("Model", all.model || "claude-sonnet-4-20250514");
+  tableRow("Model", all.model || "claude-sonnet-4-5-20250929");
   printDivider();
   console.log(chalk3.dim(`Config file: ${config.getConfigPath()}`));
   console.log();

@@ -25,10 +25,10 @@ export interface ModelConfig {
  * Available Claude models with pricing
  */
 export const MODELS: Record<string, ModelConfig> = {
-  'claude-opus-4-20250514': {
-    id: 'claude-opus-4-20250514',
-    name: 'opus-4',
-    displayName: 'Claude Opus 4',
+  'claude-opus-4-5-20251101': {
+    id: 'claude-opus-4-5-20251101',
+    name: 'opus-4.5',
+    displayName: 'Claude Opus 4.5',
     pricing: {
       inputPerMTok: 15,
       outputPerMTok: 75,
@@ -38,10 +38,10 @@ export const MODELS: Record<string, ModelConfig> = {
     contextWindow: 200000,
     description: 'Most capable model. Best for complex reasoning and creative tasks.',
   },
-  'claude-sonnet-4-20250514': {
-    id: 'claude-sonnet-4-20250514',
-    name: 'sonnet-4',
-    displayName: 'Claude Sonnet 4',
+  'claude-sonnet-4-5-20250929': {
+    id: 'claude-sonnet-4-5-20250929',
+    name: 'sonnet-4.5',
+    displayName: 'Claude Sonnet 4.5',
     pricing: {
       inputPerMTok: 3,
       outputPerMTok: 15,
@@ -51,15 +51,15 @@ export const MODELS: Record<string, ModelConfig> = {
     contextWindow: 200000,
     description: 'Balanced performance and cost. Great for most coding and trading tasks.',
   },
-  'claude-3-5-haiku-20241022': {
-    id: 'claude-3-5-haiku-20241022',
-    name: 'haiku-3.5',
-    displayName: 'Claude Haiku 3.5',
+  'claude-haiku-4-5-20251001': {
+    id: 'claude-haiku-4-5-20251001',
+    name: 'haiku-4.5',
+    displayName: 'Claude Haiku 4.5',
     pricing: {
-      inputPerMTok: 0.80,
-      outputPerMTok: 4,
-      cacheWritePerMTok: 1.00,  // 1.25x input
-      cacheReadPerMTok: 0.08,  // 0.1x input
+      inputPerMTok: 1,
+      outputPerMTok: 5,
+      cacheWritePerMTok: 1.25,  // 1.25x input
+      cacheReadPerMTok: 0.10,  // 0.1x input
     },
     contextWindow: 200000,
     description: 'Fastest and most economical. Good for simple tasks and high volume.',
@@ -67,18 +67,18 @@ export const MODELS: Record<string, ModelConfig> = {
 };
 
 // Default model
-export const DEFAULT_MODEL = 'claude-sonnet-4-20250514';
+export const DEFAULT_MODEL = 'claude-sonnet-4-5-20250929';
 
 /**
  * Short aliases for quick model selection
  */
 export const MODEL_ALIASES: Record<string, string> = {
-  'opus': 'claude-opus-4-20250514',
-  'opus-4': 'claude-opus-4-20250514',
-  'sonnet': 'claude-sonnet-4-20250514',
-  'sonnet-4': 'claude-sonnet-4-20250514',
-  'haiku': 'claude-3-5-haiku-20241022',
-  'haiku-3.5': 'claude-3-5-haiku-20241022',
+  'opus': 'claude-opus-4-5-20251101',
+  'opus-4.5': 'claude-opus-4-5-20251101',
+  'sonnet': 'claude-sonnet-4-5-20250929',
+  'sonnet-4.5': 'claude-sonnet-4-5-20250929',
+  'haiku': 'claude-haiku-4-5-20251001',
+  'haiku-4.5': 'claude-haiku-4-5-20251001',
 };
 
 /**
