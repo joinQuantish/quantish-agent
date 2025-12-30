@@ -18,8 +18,12 @@ import { createAgent } from './agent/index.js';
 import { localTools, processManager } from './tools/index.js';
 import * as ui from './ui/index.js';
 import { App } from './ui/App.js';
+import { createRequire } from 'module';
 
-const VERSION = '0.1.43';
+// Read version from package.json dynamically
+const require = createRequire(import.meta.url);
+const packageJson = require('../package.json');
+const VERSION = packageJson.version;
 
 /**
  * Cleanup function to kill all background processes on exit

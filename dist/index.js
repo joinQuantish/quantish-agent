@@ -5667,7 +5667,10 @@ Stopped ${count} background process${count > 1 ? "es" : ""}.`);
 }
 
 // src/index.ts
-var VERSION = "0.1.43";
+import { createRequire } from "module";
+var require2 = createRequire(import.meta.url);
+var packageJson = require2("../package.json");
+var VERSION = packageJson.version;
 function cleanup() {
   if (processManager.hasRunning()) {
     const count = processManager.runningCount();
