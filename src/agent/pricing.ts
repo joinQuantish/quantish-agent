@@ -104,27 +104,10 @@ export function resolveModelId(nameOrAlias: string): string | null {
     }
   }
   
-  // Check OpenRouter models
-  if (OPENROUTER_MODELS[lower]) {
-    return lower;
-  }
-  
-  // Check OpenRouter aliases
-  if (OPENROUTER_MODEL_ALIASES[lower]) {
-    return OPENROUTER_MODEL_ALIASES[lower];
-  }
-  
-  // Check if it matches an OpenRouter model name
-  for (const [id, config] of Object.entries(OPENROUTER_MODELS)) {
-    if (config.name.toLowerCase() === lower) {
-      return id;
-    }
-  }
-  
-  // For OpenRouter, also accept full model paths directly (e.g., "meta-llama/llama-3-70b")
-  if (nameOrAlias.includes('/')) {
-    return nameOrAlias;
-  }
+  // NOTE: Do NOT check OpenRouter models here!
+  // The setModel() function in loop.ts expects this function to ONLY return
+  // Anthropic models. OpenRouter models are resolved separately via
+  // resolveOpenRouterModelId() which also handles the provider auto-switch.
   
   return null;
 }

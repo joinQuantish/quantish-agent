@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.48] - 2024-12-30
+
+### Fixed
+- **OpenRouter Model Selection Bug**: Fixed critical bug where selecting OpenRouter models (like `glm`) would fail with a 404 error
+  - The `resolveModelId` function was incorrectly returning OpenRouter model IDs, preventing the provider auto-switch
+  - Now correctly detects OpenRouter models and auto-switches provider before making API calls
+  - `/model glm` and other OpenRouter shortcuts now work correctly
+
 ## [0.1.47] - 2024-12-30
 
 ### Added

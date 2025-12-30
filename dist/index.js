@@ -2620,20 +2620,6 @@ function resolveModelId(nameOrAlias) {
       return id;
     }
   }
-  if (OPENROUTER_MODELS[lower]) {
-    return lower;
-  }
-  if (OPENROUTER_MODEL_ALIASES[lower]) {
-    return OPENROUTER_MODEL_ALIASES[lower];
-  }
-  for (const [id, config] of Object.entries(OPENROUTER_MODELS)) {
-    if (config.name.toLowerCase() === lower) {
-      return id;
-    }
-  }
-  if (nameOrAlias.includes("/")) {
-    return nameOrAlias;
-  }
   return null;
 }
 function getModelPricing(modelId) {
@@ -2762,16 +2748,6 @@ var OPENROUTER_MODELS = {
     contextWindow: 32768,
     description: "Alibaba's coding specialist. Excellent for code generation."
   }
-};
-var OPENROUTER_MODEL_ALIASES = {
-  "glm": "z-ai/glm-4.7",
-  "glm-4.7": "z-ai/glm-4.7",
-  "minimax": "minimax/minimax-m2.1",
-  "deepseek": "deepseek/deepseek-chat",
-  "gemini": "google/gemini-2.0-flash-001",
-  "gemini-flash": "google/gemini-2.0-flash-001",
-  "qwen": "qwen/qwen-2.5-coder-32b-instruct",
-  "qwen-coder": "qwen/qwen-2.5-coder-32b-instruct"
 };
 
 // src/agent/provider.ts
