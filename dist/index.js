@@ -765,17 +765,42 @@ async function runSetup() {
     }
   } else {
     console.log("Options:");
-    console.log(chalk.dim("  1. Create a new Kalshi account (via agent)"));
+    console.log(chalk.dim("  1. Create a new Kalshi wallet (recommended for new users)"));
     console.log(chalk.dim("  2. Enter an existing Kalshi API key"));
     console.log(chalk.dim("  3. Skip Kalshi for now\n"));
     const choice = await prompt("Choose (1/2/3): ");
     if (choice === "1") {
-      console.log();
-      console.log(chalk.green("To create a Kalshi account, start the agent and ask:"));
-      console.log(chalk.cyan('  "Create a Kalshi account for me"'));
-      console.log(chalk.dim("\nThe agent will generate a Solana wallet and provide your API key."));
-      console.log(chalk.dim('You can then run "quantish init" again to save the key.\n'));
-      skipKalshi = true;
+      console.log(chalk.dim("\nCreating a new Solana wallet on Kalshi MCP..."));
+      const externalId = await prompt("Enter a unique identifier (e.g., email or username): ");
+      if (!externalId) {
+        console.log(chalk.red("Identifier is required to create an account."));
+        skipKalshi = true;
+      } else {
+        try {
+          const kalshiClient = createMCPClient(KALSHI_MCP_URL, "", "kalshi");
+          const result = await kalshiClient.callTool("kalshi_signup", { externalId });
+          if (result.success && typeof result.data === "object" && result.data !== null) {
+            const data = result.data;
+            kalshiKey = data.apiKey;
+            console.log(chalk.green("\n\u2713 Kalshi wallet created!"));
+            console.log(chalk.dim(`  Solana Address: ${data.walletAddress}`));
+            if (data.apiSecret) {
+              console.log(chalk.yellow("\n\u26A0\uFE0F  Save your API secret (shown only once):"));
+              console.log(chalk.bold.yellow(`   ${String(data.apiSecret)}`));
+              console.log();
+            }
+          } else {
+            console.log(chalk.red("Failed to create Kalshi account: " + (result.error || "Unknown error")));
+            console.log(chalk.dim("You can try again later via the agent."));
+            skipKalshi = true;
+          }
+        } catch (error2) {
+          console.log(chalk.red("Failed to connect to Kalshi MCP."));
+          console.log(chalk.dim(String(error2)));
+          console.log(chalk.dim("You can try again later via the agent."));
+          skipKalshi = true;
+        }
+      }
     } else if (choice === "2") {
       kalshiKey = await prompt("Enter your Kalshi API key: ", true);
     } else {

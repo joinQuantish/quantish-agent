@@ -5,35 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.16] - 2024-12-29
+## [0.1.15] - 2024-12-29
 
 ### Added
-- **OpenRouter Integration**
-  - Full support for OpenRouter as an alternative LLM provider
-  - Access to 100+ models including MiniMax M2.1, DeepSeek V3.2, Gemini 3, Grok 4.1, and more
-  - New `/provider` command to switch between Anthropic and OpenRouter
-  - Automatic provider switching when using OpenRouter model names
-  - Token and cost tracking for OpenRouter models
-  - OpenAI-compatible tool calling via OpenRouter API
-
-- **New Models Available**
-  - MiniMax M2.1 - Ultra cost-effective ($0.30/MTok input) with strong coding/agentic capabilities
-  - DeepSeek V3.2 - GPT-5 class reasoning at $0.22/MTok
-  - Mistral Devstral 2 - Free tier available for testing
-  - Google Gemini 3 Flash/Pro - 1M context window
-  - xAI Grok 4.1 Fast - 2M context, best for tool calling
-  - Many more via OpenRouter
-
-- **Configuration Updates**
-  - `OPENROUTER_API_KEY` environment variable support
-  - `/provider anthropic|openrouter` command
-  - Enhanced `/model` command shows both Anthropic and OpenRouter models
-  - `quantish config` displays provider and OpenRouter key status
+- **`edit_lines` Tool**: New line-targeted editing tool that uses line numbers instead of full string matching
+  - Much more token-efficient: sends `start_line`, `end_line`, `new_content` instead of full `old_string`
+  - Agent guided to prefer `edit_lines` over `edit_file` when line numbers are known
 
 ### Changed
-- Agent loop now uses provider abstraction for cleaner multi-provider support
-- `/model` command auto-switches provider when using OpenRouter model IDs
-- Config export now includes provider setting
+- Tool descriptions updated to guide agent toward more efficient editing patterns
+
+## [0.1.14] - 2024-12-29
+
+### Changed
+- **Unlimited Tool Calling Loop**: Removed arbitrary 15-iteration limit; agent now runs until LLM stops (safety cap at 200)
+- **Clearer API Response Docs**: System prompt now includes detailed field paths for both `search_markets` and `get_market_details` responses
+- **Streamlined System Prompt**: Further reduced prompt size while adding critical response structure documentation
+
+### Fixed
+- Agent no longer stops mid-task due to iteration limit
+- Agent now correctly maps response fields (id, marketId, outcomes, clobTokenIds, conditionId)
+
+## [0.1.7] - 2024-12-28
+
+### Added
+- **Self-Hosting Support**
+  - `quantish config --server <url>` command to set custom Trading MCP server URL
+  - `MCP_SERVER_URL` environment variable support (takes precedence)
+  - New self-hosting documentation page
+
+- **Application Building Improvements**
+  - Enhanced system prompt with complete MCP HTTP API documentation
+  - Separate instructions for Trading API (JSON-RPC 2.0) vs Discovery API (simple format)
+  - `setup_env` tool for managing `.env` files in generated applications
+  - Strict code generation rules preventing hardcoded values
+  - Explicit warning against using MCP SDK in standalone apps
+
+- **UI Improvements**
+  - Better real-time feedback during tool execution (spinner + "Running...")
+  - Escape key now properly interrupts ongoing agent operations
+
+- **Documentation**
+  - Updated README with correct `@quantish/agent` package name
+  - Complete MCP HTTP API documentation with code examples
+  - Self-hosting guide with deployment options
+  - Fixed navigation links throughout docs site
+
+### Fixed
+- Discovery API now uses correct simple `{name, arguments}` format instead of JSON-RPC
+- AbortSignal properly passed to Anthropic API calls for interrupt handling
+- Tool call UI now shows pending state before execution completes
 
 ## [0.1.0] - 2024-12-28
 
@@ -99,6 +120,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Custom tool definitions
 - Multi-agent orchestration
 - Automated trading strategies
-
-
 

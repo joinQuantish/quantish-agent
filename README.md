@@ -1,16 +1,8 @@
 # @quantish/agent
 
-AI-powered coding & trading agent for Polymarket and Kalshi. Build trading bots, analyze markets, and execute trades using natural language.
+AI-powered CLI agent for building trading bots and applications on Polymarket.
 
-## ✨ Features
-
-- **🤖 Multi-Provider AI** - Use Anthropic Claude or 100+ OpenRouter models (GLM-4.7, MiniMax, DeepSeek, etc.)
-- **💹 Live Trading** - Trade on Polymarket (Polygon) and Kalshi (Solana via DFlow)
-- **🔧 Full Coding Tools** - Read/write files, run commands, git operations
-- **🌐 Web Search** - Search the web with Exa AI or DuckDuckGo fallback
-- **💾 Session Persistence** - Save and resume conversations across sessions
-- **⚡ Queued Input** - Type while the agent is working, queue messages
-- **📊 Cost Tracking** - Real-time token usage and cost display
+Combines **coding tools** (file system, shell, git) with **trading tools** (Polymarket orders, positions, wallet) powered by Claude AI.
 
 ## Installation
 
@@ -18,97 +10,203 @@ AI-powered coding & trading agent for Polymarket and Kalshi. Build trading bots,
 npm install -g @quantish/agent
 ```
 
-## Quick Start
+Or run directly with npx:
 
 ```bash
-# First-time setup
-quantish init
+npx @quantish/agent
+```
 
-# Start interactive chat
+## Quick Start
+
+### 1. Initialize
+
+Set up your API keys:
+
+```bash
+quantish init
+```
+
+You'll need:
+- **Anthropic API Key** - Get one at https://console.anthropic.com/
+- **Quantish API Key** - Created automatically during setup
+
+### 2. Start Building
+
+**Interactive mode:**
+
+```bash
 quantish
 ```
 
-## How It Works
+Example conversations:
 
-The agent connects to three MCP (Model Context Protocol) servers:
+```
+You: Create a trading bot that monitors Bitcoin markets and alerts on price changes
+Assistant: I'll create that for you. Let me first search for Bitcoin markets...
+[Calling search_markets...]
+[Writing bitcoin-monitor.js...]
 
-| MCP | URL | Auth | Purpose |
-|-----|-----|------|---------|
-| Discovery | `quantish.live/mcp` | Public (embedded key) | Search markets across all platforms |
-| Polymarket | `quantish-sdk-production.up.railway.app/mcp` | `QUANTISH_API_KEY` | Trade on Polymarket (Polygon) |
-| Kalshi | `kalshi-mcp-production-7c2c.up.railway.app/mcp` | `KALSHI_API_KEY` | Trade on Kalshi (Solana via DFlow) |
+You: What's my current balance?
+Assistant: Your Safe wallet has 125.50 USDC available for trading.
 
-**Polymarket** - Managed Polygon wallet:
-- ✅ Gasless transactions (Polymarket covers fees)
-- ✅ Signs orders using Polymarket's required format  
-- ✅ Works globally (no geo-restrictions)
-- 🔒 Non-custodial - export your private key anytime
+You: Place a $10 YES order on Trump winning at 55 cents
+Assistant: Order placed! Order ID: abc123...
+```
 
-**Kalshi** - Managed Solana wallet via DFlow:
-- ✅ Trade on CFTC-regulated Kalshi markets
-- ✅ Uses DFlow protocol for on-chain settlement
-- ⚡ Small SOL fees (~0.01 SOL per trade)
-- 🔒 Non-custodial - export your private key anytime
-
-## Interactive Commands
-
-### Chat Commands
-
-| Command | Description |
-|---------|-------------|
-| `/help` | Show all commands |
-| `/clear` | Clear conversation history |
-| `/compact` | Summarize conversation to save tokens |
-| `/model <name>` | Switch model (opus, sonnet, haiku, glm, minimax, etc.) |
-| `/provider <name>` | Switch LLM provider (anthropic, openrouter) |
-| `/cost` | Show session cost breakdown |
-| `/tools` | List available tools |
-| `/config` | Show configuration info |
-
-### Session Commands
-
-| Command | Description |
-|---------|-------------|
-| `/save [name]` | Save current session |
-| `/resume` | Resume last session |
-| `/sessions` | List all saved sessions |
-| `/load <id>` | Load a session by ID |
-| `/forget` | Delete all saved sessions |
-
-### Process Commands
-
-| Command | Description |
-|---------|-------------|
-| `/processes` | List running background processes |
-| `/stop <id>` | Stop a background process |
-| `/stopall` | Stop all background processes |
-
-### Keyboard Shortcuts
-
-| Key | Action |
-|-----|--------|
-| `Enter` | Send message (or queue if agent is working) |
-| `Esc` | Interrupt current generation |
-| `Ctrl+C` | Exit CLI |
-
-## CLI Options
+**One-shot mode:**
 
 ```bash
-quantish                    # Interactive mode
-quantish init               # First-time setup wizard
-quantish config             # View configuration
-quantish config --export    # Export as .env format
-quantish tools              # List all available tools
-quantish -p "message"       # One-shot mode
-quantish --version          # Show version
+quantish -p "check my open orders"
 ```
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `quantish` | Start interactive chat |
+| `quantish init` | Configure API keys |
+| `quantish config` | View configuration |
+| `quantish config --server <url>` | Set custom MCP server URL |
+| `quantish config --export` | Export keys for standalone apps |
+| `quantish tools` | List available tools |
+| `quantish -p "..."` | Run one-shot prompt |
+
+## Options
 
 | Option | Description |
 |--------|-------------|
 | `-p, --prompt <message>` | Run a single prompt |
-| `-v, --verbose` | Show detailed tool calls |
+| `-v, --verbose` | Show tool calls |
 | `--no-mcp` | Disable trading tools |
 | `--no-local` | Disable coding tools |
+| `--version` | Show version |
+| `--help` | Show help |
+
+## Building Standalone Applications
+
+The real power of Quantish is building standalone applications that interact with prediction markets. The agent can create trading bots, web dashboards, notification systems, and more.
+
+### MCP API Overview
+
+There are two MCP endpoints:
+
+| Endpoint | Purpose | Auth Required |
+|----------|---------|---------------|
+| Trading API | Wallet, orders, positions | Yes (QUANTISH_API_KEY) |
+| Discovery API | Search markets, prices | No (public key) |
+
+### Trading API (Requires Your API Key)
+
+```javascript
+const response = await fetch('https://quantish-sdk-production.up.railway.app/mcp/execute', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'x-api-key': process.env.QUANTISH_API_KEY
+  },
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'tools/call',
+    params: { name: 'get_balances', arguments: {} },
+    id: Date.now()
+  })
+});
+
+const data = await response.json();
+const result = JSON.parse(data.result.content[0].text);
+```
+
+**Trading Tools:** `get_balances`, `get_positions`, `place_order`, `cancel_order`, `get_orders`, `get_orderbook`, `get_price`, `transfer_usdc`
+
+### Discovery API (Free, No Auth)
+
+```javascript
+const response = await fetch('https://quantish.live/mcp/execute', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-API-Key': 'qm_ueQeqrmvZyHtR1zuVbLYkhx0fKyVAuV8'  // Public key
+  },
+  body: JSON.stringify({
+    name: 'search_markets',           // Simple format for Discovery
+    arguments: { query: 'bitcoin', limit: 5 }
+  })
+});
+
+const data = await response.json();
+const result = JSON.parse(data.result.content[0].text);
+```
+
+**Discovery Tools:** `search_markets`, `get_market_details`, `get_trending_markets`, `find_arbitrage`
+
+### Example: Ask the Agent to Build an App
+
+```bash
+quantish
+> Create a Node.js script that monitors Bitcoin markets and sends a Discord notification when prices move more than 10%
+```
+
+The agent will create all necessary files:
+- Main application code with MCP helper functions
+- `package.json` with dependencies
+- `.env.example` with required environment variables
+- `README.md` with setup instructions
+
+## Architecture
+
+```
+quantish (CLI)
+    │
+    ├── Local Tools (filesystem, shell, git)
+    │   └── Runs directly on your machine
+    │
+    └── MCP Tools (trading + discovery)
+        ├── Trading MCP (your wallet, orders)
+        │   └── https://quantish-sdk-production.up.railway.app/mcp
+        │
+        └── Discovery MCP (public market data)
+            └── https://quantish.live/mcp
+```
+
+## Self-Hosting
+
+You can run your own Trading MCP server for full control over your wallet keys.
+
+### Configure Custom Server
+
+```bash
+# Set via CLI
+quantish config --server https://your-server.com/mcp
+
+# Or via environment variable
+export MCP_SERVER_URL=https://your-server.com/mcp
+```
+
+### What You Need
+
+1. **Server**: Deploy the `quantish-server` to Railway, Render, or your own VPS
+2. **Database**: PostgreSQL for user data and encrypted keys
+3. **Polymarket Builder Credentials**: Apply at https://polymarket.com/builder
+
+See [Self-Hosting Guide](https://quantish.live/docs/self-hosting.html) for full instructions.
+
+## Configuration
+
+Configuration is stored in `~/.quantish/config.json`:
+
+```json
+{
+  "anthropicApiKey": "sk-ant-...",
+  "quantishApiKey": "qtsh_...",
+  "mcpServerUrl": "https://quantish-sdk-production.up.railway.app/mcp",
+  "model": "claude-sonnet-4-5-20250929"
+}
+```
+
+Environment variables take precedence:
+- `ANTHROPIC_API_KEY`
+- `QUANTISH_API_KEY`
+- `MCP_SERVER_URL`
 
 ## Available Tools
 
@@ -116,55 +214,25 @@ quantish --version          # Show version
 
 | Tool | Description |
 |------|-------------|
-| `read_file` | Read file contents with line numbers |
-| `write_file` | Create or overwrite files |
+| `read_file` | Read file contents |
+| `write_file` | Write/create files |
 | `edit_file` | Search and replace in files |
-| `edit_lines` | Edit specific line ranges (efficient) |
 | `list_dir` | List directory contents |
 | `delete_file` | Delete files |
-| `file_exists` | Check if file exists |
-| `run_command` | Execute shell commands (blocking) |
-| `start_background_process` | Run long-running processes |
-| `get_process_output` | Get output from background process |
-| `stop_process` | Stop a background process |
+| `setup_env` | Create/update .env files |
+| `run_command` | Execute shell commands |
 | `grep` | Search file contents |
 | `find_files` | Find files by pattern |
-| `setup_env` | Create/update .env files |
-
-### Git Tools
-
-| Tool | Description |
-|------|-------------|
-| `git_status` | Get repository status |
-| `git_diff` | Show changes |
+| `git_status` | Get git status |
+| `git_diff` | Show git diff |
 | `git_add` | Stage files |
 | `git_commit` | Create commits |
-| `git_log` | Show commit history |
-| `git_checkout` | Switch branches |
 
-### Web Tools
+### MCP Tools (Trading)
 
 | Tool | Description |
 |------|-------------|
-| `web_search` | Search the web (Exa/DuckDuckGo) |
-| `web_answer` | AI-powered Q&A (requires Exa API key) |
-| `fetch_url` | Fetch URL content |
-
-### MCP Tools - Discovery
-
-| Tool | Description |
-|------|-------------|
-| `search_markets` | Search markets across Polymarket, Kalshi, Limitless |
-| `get_trending_markets` | Get trending/popular markets |
-| `get_market_details` | Get market info and prices |
-| `get_categories` | List available categories |
-| `get_market_stats` | Get platform statistics |
-
-### MCP Tools - Polymarket Trading
-
-| Tool | Description |
-|------|-------------|
-| `get_balances` | Check USDC and position balances |
+| `get_balances` | Check wallet balances |
 | `get_positions` | View current positions |
 | `place_order` | Place buy/sell orders |
 | `cancel_order` | Cancel open orders |
@@ -172,182 +240,15 @@ quantish --version          # Show version
 | `get_orderbook` | Get market orderbook |
 | `get_price` | Get current price |
 | `transfer_usdc` | Transfer USDC |
-| `claim_winnings` | Claim from resolved markets |
-| `export_private_key` | Export wallet private key |
 
-### MCP Tools - Kalshi Trading
+### MCP Tools (Discovery)
 
 | Tool | Description |
 |------|-------------|
-| `kalshi_signup` | Create new account with Solana wallet |
-| `kalshi_search_markets` | Search Kalshi markets |
-| `kalshi_get_market` | Get market details by ticker |
-| `kalshi_get_events` | Browse market categories |
-| `kalshi_get_live_data` | Get live market data |
-| `kalshi_get_quote` | Get quote for buy/sell order |
-| `kalshi_place_order` | Execute a trade on Solana |
-| `kalshi_get_wallet_info` | Get wallet address and balances |
-| `kalshi_get_positions` | View Kalshi positions |
-| `kalshi_check_market_initialization` | Check if market is tokenized |
-| `kalshi_initialize_market` | Initialize market on-chain |
-| `kalshi_check_redemption_status` | Check if market can be redeemed |
-| `kalshi_export_private_key` | Export Solana private key |
-
-## LLM Providers
-
-### Anthropic (Default for new installs)
-
-Uses Claude models directly via Anthropic API.
-
-```bash
-/model opus    # Claude Opus 4.5 - Most capable
-/model sonnet  # Claude Sonnet 4.5 - Balanced (default)
-/model haiku   # Claude Haiku 4.5 - Fastest/cheapest
-```
-
-### OpenRouter
-
-Access 100+ models from various providers.
-
-```bash
-/provider openrouter  # Switch to OpenRouter
-
-/model glm      # GLM-4.7 (default for OpenRouter) - Best for coding
-/model minimax  # MiniMax M2.1 - Fast and cheap
-/model deepseek # DeepSeek V3.2 - Great reasoning
-/model gemini   # Gemini 2.0 Flash - Google's latest
-/model grok     # Grok 3 Mini Beta - xAI
-```
-
-Or use any OpenRouter model ID:
-```bash
-/model anthropic/claude-3.5-sonnet
-/model meta-llama/llama-3.3-70b-instruct
-```
-
-## Configuration
-
-Configuration is stored in `~/.quantish/config.json`.
-
-### Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `ANTHROPIC_API_KEY` | Anthropic API key |
-| `OPENROUTER_API_KEY` | OpenRouter API key |
-| `QUANTISH_API_KEY` | Polymarket trading API key |
-| `KALSHI_API_KEY` | Kalshi trading API key |
-| `EXA_API_KEY` | Exa AI search key (optional) |
-| `MCP_SERVER_URL` | Custom Polymarket MCP server URL |
-| `KALSHI_MCP_URL` | Custom Kalshi MCP server URL |
-
-### Export Configuration
-
-```bash
-quantish config --export > .env
-```
-
-## Building Applications
-
-The agent can build standalone applications that use the Quantish MCP API. When building apps, ensure:
-
-1. **Use HTTP API** - Don't use MCP SDK directly
-2. **Environment Variables** - Store API keys in `.env`
-3. **Three Endpoints**:
-   - Discovery: `https://quantish.live/mcp/execute` (public)
-   - Polymarket: `https://quantish-sdk-production.up.railway.app/mcp/execute` (requires `QUANTISH_API_KEY`)
-   - Kalshi: `https://kalshi-mcp-production-7c2c.up.railway.app/mcp` (requires `KALSHI_API_KEY`)
-
-Example API calls:
-
-```javascript
-// Discovery MCP (simple format)
-const response = await fetch('https://quantish.live/mcp/execute', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'X-API-Key': 'qm_ueQeqrmvZyHtR1zuVbLYkhx0fKyVAuV8'
-  },
-  body: JSON.stringify({
-    name: 'search_markets',
-    arguments: { query: 'bitcoin', limit: 5 }
-  })
-});
-
-// Polymarket Trading MCP (JSON-RPC format)
-const response = await fetch('https://quantish-sdk-production.up.railway.app/mcp/execute', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'X-API-Key': process.env.QUANTISH_API_KEY
-  },
-  body: JSON.stringify({
-    jsonrpc: '2.0',
-    id: 1,
-    method: 'tools/call',
-    params: { name: 'get_positions', arguments: {} }
-  })
-});
-
-// Kalshi Trading MCP (JSON-RPC format)
-const response = await fetch('https://kalshi-mcp-production-7c2c.up.railway.app/mcp', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'X-API-Key': process.env.KALSHI_API_KEY
-  },
-  body: JSON.stringify({
-    jsonrpc: '2.0',
-    id: 1,
-    method: 'tools/call',
-    params: { name: 'kalshi_get_positions', arguments: {} }
-  })
-});
-```
-
-## Self-Hosting
-
-You can self-host your own Trading MCP servers for full control over your wallet keys.
-
-### Polymarket Server
-
-```bash
-npm install @quantish/server
-```
-
-```bash
-# Configure CLI to use your server
-export MCP_SERVER_URL=https://your-server.com/mcp
-```
-
-Resources:
-- **NPM**: [@quantish/server](https://www.npmjs.com/package/@quantish/server)
-- **GitHub**: [joinQuantish/quantish-server](https://github.com/joinQuantish/quantish-server)
-- **Polymarket API**: [docs.polymarket.com](https://docs.polymarket.com)
-
-### Kalshi Server
-
-```bash
-npm install @quantish/kalshi-server
-```
-
-```bash
-# Configure CLI to use your server
-export KALSHI_MCP_URL=https://your-kalshi-server.com/mcp
-```
-
-Required environment variables for Kalshi server:
-- `DATABASE_URL` - PostgreSQL connection string
-- `ENCRYPTION_KEY` - 64-char hex string for wallet encryption
-- `DFLOW_API_KEY` - DFlow API key
-- `SOLANA_RPC_URL` - Solana RPC endpoint
-
-Resources:
-- **NPM**: [@quantish/kalshi-server](https://www.npmjs.com/package/@quantish/kalshi-server)
-- **GitHub**: [joinQuantish/kalshi-mcp](https://github.com/joinQuantish/kalshi-mcp)
-- **DFlow Docs**: [docs.dflow.net](https://docs.dflow.net)
-
-See the [Self-Hosting Guide](https://docs.quantish.live/self-hosting.html) for full deployment instructions.
+| `search_markets` | Search markets by keyword |
+| `get_market_details` | Get full market info |
+| `get_trending_markets` | Popular markets |
+| `find_arbitrage` | Find price discrepancies |
 
 ## Platform Support
 
@@ -357,81 +258,17 @@ See the [Self-Hosting Guide](https://docs.quantish.live/self-hosting.html) for f
 | Linux | ✅ Full support |
 | Windows | ⚠️ Requires WSL |
 
-## Examples
+**Windows users:** Install [WSL](https://learn.microsoft.com/en-us/windows/wsl/install) and run Quantish from within WSL.
 
-```bash
-# Search for markets (both Polymarket and Kalshi)
-quantish -p "find markets about bitcoin"
+## How It Works
 
-# Check Polymarket positions
-quantish -p "show my Polymarket positions with P&L"
+Quantish CLI connects to the **Quantish Signing Server** to execute trades on Polymarket:
 
-# Check Kalshi positions
-quantish -p "show my Kalshi positions"
-
-# Create a Kalshi account
-quantish
-> Create a Kalshi account for me
-
-# Trade on Kalshi
-quantish
-> Buy $10 of YES on the next Fed rate decision market on Kalshi
-
-# Build a trading bot
-quantish
-> Create a bot that monitors Trump markets and alerts me when prices change more than 5%
-
-# Code review
-quantish
-> Review my trading bot code and suggest improvements
-```
-
-## Troubleshooting
-
-### Tool calls failing with malformed arguments
-
-Some OpenRouter models (like GLM-4.7) occasionally emit malformed tool calls. The CLI includes robust parsing to handle these, but if issues persist:
-
-```bash
-/model sonnet  # Switch to Claude Sonnet
-```
-
-### Session not resuming
-
-Sessions are stored in `~/.quantish/sessions/`. To reset:
-
-```bash
-rm -rf ~/.quantish/sessions
-```
-
-### High token usage
-
-```bash
-/compact       # Summarize conversation
-/model haiku   # Switch to cheaper model
-/clear         # Start fresh
-```
-
-## Development
-
-```bash
-git clone https://github.com/joinQuantish/quantish-agent
-cd quantish-agent
-npm install
-npm run build
-npm link  # Install locally
-```
+- **Your funds are secure** - Only you can authorize transactions via your API key
+- **Wallets are non-custodial** - Export your private key anytime with `export_private_key`
+- **Trading is free** - No gas fees (Polymarket covers them)
+- **Self-hosting available** - Run your own server for full control
 
 ## License
 
-This project is licensed under the [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/).
-
-**Free for personal use, research, and non-commercial purposes.** Commercial use requires explicit permission from Quantish Inc. Contact hello@quantish.live for commercial licensing.
-
-## Links
-
-- [Agent Website](https://agent.quantish.live)
-- [GitHub](https://github.com/joinQuantish/quantish-agent)
-- [NPM](https://www.npmjs.com/package/@quantish/agent)
-- [Documentation](https://docs.quantish.live)
-- [Quantish Platform](https://quantish.live)
+MIT
