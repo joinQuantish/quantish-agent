@@ -370,9 +370,13 @@ export async function runSetup(): Promise<boolean> {
       if (result.success && typeof result.data === 'object' && result.data !== null) {
         const data = result.data as Record<string, unknown>;
         console.log(chalk.green('✓ Polymarket MCP connected'));
-        console.log(chalk.dim(`  Safe Address: ${data.safeAddress || 'Not yet deployed'}`));
-        console.log(chalk.dim(`  Status: ${data.status}`));
-        console.log(chalk.dim(`  Ready to trade: ${data.isReady ? 'Yes' : 'Run setup_wallet first'}`));
+        if (data.safeAddress) {
+          console.log(chalk.dim(`  Safe Address: ${data.safeAddress}`));
+          console.log(chalk.dim(`  Status: READY`));
+        } else {
+          console.log(chalk.dim(`  Safe Address: Will deploy on first trade`));
+          console.log(chalk.dim(`  Status: CREATED (wallet ready, Safe deploys on first trade)`));
+        }
       } else {
         console.log(chalk.yellow('⚠ Polymarket MCP: ' + (result.error || 'Unknown error')));
       }
@@ -392,8 +396,14 @@ export async function runSetup(): Promise<boolean> {
       
       if (result.success && typeof result.data === 'object' && result.data !== null) {
         const data = result.data as Record<string, unknown>;
+        // Response structure is { wallet: { publicKey: ... } }
+        const wallet = data.wallet as Record<string, unknown> | undefined;
+        const publicKey = wallet?.publicKey as string | undefined;
         console.log(chalk.green('✓ Kalshi MCP connected'));
-        console.log(chalk.dim(`  Solana Address: ${data.publicKey || 'Unknown'}`));
+        console.log(chalk.dim(`  Solana Address: ${publicKey || 'No wallet yet'}`));
+        if (wallet) {
+          console.log(chalk.dim(`  Status: READY`));
+        }
       } else {
         console.log(chalk.yellow('⚠ Kalshi MCP: ' + (result.error || 'Unknown error')));
       }

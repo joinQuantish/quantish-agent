@@ -846,9 +846,13 @@ async function runSetup() {
       if (result.success && typeof result.data === "object" && result.data !== null) {
         const data = result.data;
         console.log(chalk.green("\u2713 Polymarket MCP connected"));
-        console.log(chalk.dim(`  Safe Address: ${data.safeAddress || "Not yet deployed"}`));
-        console.log(chalk.dim(`  Status: ${data.status}`));
-        console.log(chalk.dim(`  Ready to trade: ${data.isReady ? "Yes" : "Run setup_wallet first"}`));
+        if (data.safeAddress) {
+          console.log(chalk.dim(`  Safe Address: ${data.safeAddress}`));
+          console.log(chalk.dim(`  Status: READY`));
+        } else {
+          console.log(chalk.dim(`  Safe Address: Will deploy on first trade`));
+          console.log(chalk.dim(`  Status: CREATED (wallet ready, Safe deploys on first trade)`));
+        }
       } else {
         console.log(chalk.yellow("\u26A0 Polymarket MCP: " + (result.error || "Unknown error")));
       }
@@ -865,8 +869,13 @@ async function runSetup() {
       const result = await kalshiClient.callTool("kalshi_get_wallet_info", {});
       if (result.success && typeof result.data === "object" && result.data !== null) {
         const data = result.data;
+        const wallet = data.wallet;
+        const publicKey = wallet?.publicKey;
         console.log(chalk.green("\u2713 Kalshi MCP connected"));
-        console.log(chalk.dim(`  Solana Address: ${data.publicKey || "Unknown"}`));
+        console.log(chalk.dim(`  Solana Address: ${publicKey || "No wallet yet"}`));
+        if (wallet) {
+          console.log(chalk.dim(`  Status: READY`));
+        }
       } else {
         console.log(chalk.yellow("\u26A0 Kalshi MCP: " + (result.error || "Unknown error")));
       }
@@ -5443,7 +5452,7 @@ Stopped ${count} background process${count > 1 ? "es" : ""}.`);
 }
 
 // src/index.ts
-var VERSION = "0.1.28";
+var VERSION = "0.1.29";
 function cleanup() {
   if (processManager.hasRunning()) {
     const count = processManager.runningCount();
