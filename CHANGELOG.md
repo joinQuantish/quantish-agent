@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.45] - 2024-12-30
+
+### Fixed
+- **Agent now displays prices in market tables**: Updated system prompt to explicitly instruct agent to include outcome prices (Yes/No probabilities) when presenting search results
+- Response data includes prices but agent wasn't showing them - now fixed via prompt guidance
+
 ## [0.1.44] - 2024-12-30
 
 ### Added
