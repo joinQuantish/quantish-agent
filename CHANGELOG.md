@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.42] - 2024-12-30
+
+### Fixed
+- **Reduced Excessive Tool Calls**: Rewrote system prompt to prevent agent from making dozens of redundant tool calls
+  - Agent now makes ONE search call and immediately presents results
+  - No longer calls `get_market_details` on every single search result
+  - No longer makes parallel searches with slight query variations
+
+### Added
+- **Preserved App/Bot Building**: Re-added detailed coding tools documentation
+  - Background process management (start_background_process, get_process_output, stop_process)
+  - Git operations (status, diff, add, commit)
+  - API endpoint documentation for building standalone apps
+  - Clear guidance for when user wants to build trading bots
+
 ## [0.1.40] - 2024-12-30
 
 ### Fixed
