@@ -1,6 +1,25 @@
-# @quantish/agent
+# @quantish/agent (V1)
 
 AI-powered coding & trading agent for Polymarket and Kalshi. Build trading bots, analyze markets, and execute trades using natural language.
+
+> **Looking for V2?** See [@quantish/agent-v2](https://github.com/joinQuantish/quantish-agent-v2) - Gemini-powered with native MCP integration.
+
+## V1 vs V2 - Which Should I Use?
+
+| Feature | V1 (`@quantish/agent`) | V2 (`@quantish/agent-v2`) |
+|---------|------------------------|---------------------------|
+| CLI Command | `quantish` | `quantish2` |
+| Backend | OpenRouter / Anthropic | Google Gemini |
+| Auth | API Key only | Google OAuth / API Key / Vertex AI |
+| File Tools | Basic read/write | Full sandbox with file operations |
+| MCP Integration | Custom HTTP clients | Native MCP protocol |
+| Best For | Custom bots, full control | General trading, app building |
+
+**Install both side-by-side:**
+```bash
+npm install -g @quantish/agent      # V1 -> quantish
+npm install -g @quantish/agent-v2   # V2 -> quantish2
+```
 
 ## ✨ Features
 
