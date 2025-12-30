@@ -674,9 +674,40 @@ async function runSetup() {
   let skipTrading = false;
   if (quantishKey) {
     console.log(chalk.dim(`Current trading key: ${quantishKey.slice(0, 12)}...`));
-    const action = await prompt("Keep current key (Enter), enter new key (n), or disable trading (d): ");
+    const action = await prompt("Keep (Enter), new key (n), create wallet (c), or disable (d): ");
     if (action.toLowerCase() === "n") {
       quantishKey = await prompt("Enter your Quantish Trading API key: ", true);
+    } else if (action.toLowerCase() === "c") {
+      console.log(chalk.dim("\nCreating a new wallet on Quantish Signing Server..."));
+      const externalId = await prompt("Enter a unique identifier (e.g., email or username): ");
+      if (!externalId) {
+        console.log(chalk.red("Identifier is required to create an account."));
+        console.log(chalk.dim("Keeping current key.\n"));
+      } else {
+        try {
+          const mcpClient = createMCPClient(config.getTradingMcpUrl(), "");
+          const result = await mcpClient.callTool("request_api_key", { externalId });
+          if (result.success && typeof result.data === "object" && result.data !== null) {
+            const data = result.data;
+            quantishKey = data.apiKey;
+            console.log(chalk.green("\n\u2713 New wallet created!"));
+            console.log(chalk.dim(`  EOA Address: ${data.eoaAddress}`));
+            console.log(chalk.dim("  (Your Safe wallet will deploy on first trade)\n"));
+            if (data.apiSecret) {
+              console.log(chalk.yellow("\u26A0\uFE0F  Save your API secret (shown only once):"));
+              console.log(chalk.bold.yellow(`   ${String(data.apiSecret)}`));
+              console.log();
+            }
+          } else {
+            console.log(chalk.red("Failed to create wallet: " + (result.error || "Unknown error")));
+            console.log(chalk.dim("Keeping current key.\n"));
+          }
+        } catch (error2) {
+          console.log(chalk.red("Failed to connect to Quantish Trading Server."));
+          console.log(chalk.dim(String(error2)));
+          console.log(chalk.dim("Keeping current key.\n"));
+        }
+      }
     } else if (action.toLowerCase() === "d") {
       quantishKey = void 0;
       skipTrading = true;
@@ -740,9 +771,39 @@ async function runSetup() {
   let skipKalshi = false;
   if (kalshiKey) {
     console.log(chalk.dim(`Current Kalshi key: ${kalshiKey.slice(0, 12)}...`));
-    const action = await prompt("Keep current key (Enter), enter new key (n), or disable Kalshi (d): ");
+    const action = await prompt("Keep (Enter), new key (n), create wallet (c), or disable (d): ");
     if (action.toLowerCase() === "n") {
       kalshiKey = await prompt("Enter your Kalshi API key: ", true);
+    } else if (action.toLowerCase() === "c") {
+      console.log(chalk.dim("\nCreating a new Solana wallet on Kalshi MCP..."));
+      const externalId = await prompt("Enter a unique identifier (e.g., email or username): ");
+      if (!externalId) {
+        console.log(chalk.red("Identifier is required to create an account."));
+        console.log(chalk.dim("Keeping current key.\n"));
+      } else {
+        try {
+          const kalshiClient = createMCPClient(KALSHI_MCP_URL, "", "kalshi");
+          const result = await kalshiClient.callTool("kalshi_signup", { externalId });
+          if (result.success && typeof result.data === "object" && result.data !== null) {
+            const data = result.data;
+            kalshiKey = data.apiKey;
+            console.log(chalk.green("\n\u2713 New Kalshi wallet created!"));
+            console.log(chalk.dim(`  Solana Address: ${data.walletAddress}`));
+            if (data.apiSecret) {
+              console.log(chalk.yellow("\n\u26A0\uFE0F  Save your API secret (shown only once):"));
+              console.log(chalk.bold.yellow(`   ${String(data.apiSecret)}`));
+              console.log();
+            }
+          } else {
+            console.log(chalk.red("Failed to create wallet: " + (result.error || "Unknown error")));
+            console.log(chalk.dim("Keeping current key.\n"));
+          }
+        } catch (error2) {
+          console.log(chalk.red("Failed to connect to Kalshi MCP."));
+          console.log(chalk.dim(String(error2)));
+          console.log(chalk.dim("Keeping current key.\n"));
+        }
+      }
     } else if (action.toLowerCase() === "d") {
       kalshiKey = void 0;
       skipKalshi = true;
@@ -3596,13 +3657,17 @@ search_markets already returns prices, volume, and liquidity.
 
 ## Tools Available
 
-**Discovery MCP** (market data):
-- search_markets(query, limit=10) \u2192 Markets with prices from Polymarket/Kalshi/Limitless
-- get_market_details(platform, marketId) \u2192 Only when user asks about ONE specific market
+**Discovery MCP** (market data - prices included):
+- search_markets(query, limit=10) \u2192 Markets WITH prices from Polymarket/Kalshi/Limitless
+- get_market_details(platform, marketId) \u2192 Full details WITH prices for ONE market
 - get_trending_markets(limit=10) \u2192 Hot markets by volume
 
-**Polymarket Trading**:
-- place_order, cancel_order, get_orders, get_positions, get_balances, get_price, get_orderbook
+**Polymarket Trading** (requires conditionId from Discovery results):
+- place_order, cancel_order, get_orders, get_positions, get_balances
+- get_price(tokenId) \u2192 Live price (only if you need real-time, Discovery already has prices)
+- get_orderbook(tokenId) \u2192 Bid/ask depth
+
+NOTE: Don't use get_market - use get_market_details from Discovery instead.
 
 **Kalshi Trading** (via DFlow):
 - kalshi_buy_yes, kalshi_buy_no, kalshi_get_positions, kalshi_get_balances
@@ -3614,10 +3679,22 @@ search_markets already returns prices, volume, and liquidity.
 - get_process_output, list_processes, stop_process
 - git operations: status, diff, add, commit
 
+## CRITICAL: File Operations
+
+**NEVER repeat the same operation.** If write_file or edit_file fails:
+1. Stop and tell the user what went wrong
+2. Do NOT retry with the same content
+3. Do NOT delete and rewrite - use edit_file to fix specific issues
+
+When writing code files:
+- Write complete, valid code (not JSON-escaped strings)
+- Create one file at a time, verify it works
+- If you get stuck, ask the user for help
+
 ## Building Trading Bots
 
 When user wants to build an app or bot:
-1. Use coding tools to create files (write_file, edit_file)
+1. Create files one at a time with write_file
 2. The MCP servers are HTTP APIs - apps can call them directly
 3. Use start_background_process for dev servers
 4. API endpoints:
@@ -3629,7 +3706,7 @@ When user wants to build an app or bot:
 - Kalshi: percentages like 5% YES
 
 Be concise. Present results clearly. Wait for user input.`;
-var Agent = class {
+var Agent = class _Agent {
   anthropic;
   llmProvider;
   mcpClient;
@@ -3639,6 +3716,11 @@ var Agent = class {
   workingDirectory;
   sessionCost = 0;
   // Cumulative cost for this session
+  // Loop detection: track last N tool calls to detect loops
+  recentToolCalls = [];
+  static MAX_RECENT_TOOL_CALLS = 5;
+  static LOOP_THRESHOLD = 2;
+  // Abort if same call appears this many times
   cumulativeTokenUsage = {
     inputTokens: 0,
     outputTokens: 0,
@@ -3742,10 +3824,16 @@ ${userMessage}`;
       role: "user",
       content: contextMessage
     });
+    this.clearToolCallLoopTracking();
     const toolCalls = [];
     let iterations = 0;
     let finalText = "";
-    while (iterations < maxIterations) {
+    const maxTurns = this.config.maxTurns ?? maxIterations;
+    while (iterations < maxTurns) {
+      if (this.config.abortSignal?.aborted) {
+        finalText += "\n\n[Operation cancelled by user]";
+        break;
+      }
       iterations++;
       this.config.onStreamStart?.();
       let response;
@@ -3862,6 +3950,18 @@ ${userMessage}`;
    * Execute a tool (local or MCP)
    */
   async executeTool(name, args) {
+    if (this.config.abortSignal?.aborted) {
+      return {
+        result: { error: "Operation cancelled by user" },
+        source: "local"
+      };
+    }
+    if (this.checkToolCallLoop(name, args)) {
+      return {
+        result: { error: `Loop detected: "${name}" was called multiple times with the same input. Please try a different approach.` },
+        source: "local"
+      };
+    }
     if (isLocalTool(name)) {
       const result = await executeLocalTool(name, args);
       return {
@@ -3890,9 +3990,18 @@ ${userMessage}`;
     };
   }
   /**
+   * Set the abort signal for the current request (call before run())
+   */
+  setAbortSignal(signal) {
+    this.config.abortSignal = signal;
+  }
+  /**
    * Run the agent with a user message (supports streaming)
    */
-  async run(userMessage) {
+  async run(userMessage, options) {
+    if (options?.abortSignal) {
+      this.config.abortSignal = options.abortSignal;
+    }
     if (this.config.provider === "openrouter") {
       return this.runWithProvider(userMessage);
     }
@@ -3910,10 +4019,16 @@ ${userMessage}`;
       role: "user",
       content: contextMessage
     });
+    this.clearToolCallLoopTracking();
     const toolCalls = [];
     let iterations = 0;
     let finalText = "";
-    while (iterations < maxIterations) {
+    const maxTurns = this.config.maxTurns ?? maxIterations;
+    while (iterations < maxTurns) {
+      if (this.config.abortSignal?.aborted) {
+        finalText += "\n\n[Operation cancelled by user]";
+        break;
+      }
       iterations++;
       this.config.onStreamStart?.();
       let response;
@@ -4118,6 +4233,32 @@ ${userMessage}`;
    * @param usage - Token counts from the API response
    * @param preCalculatedCost - Optional pre-calculated cost (from OpenRouter provider)
    */
+  /**
+   * Check if a tool call would create a loop (same call repeated too many times).
+   * Returns true if this call is part of a loop and should be stopped.
+   */
+  checkToolCallLoop(toolName, input) {
+    const inputStr = JSON.stringify(input);
+    const callSignature = `${toolName}:${inputStr}`;
+    this.recentToolCalls.push({ name: toolName, input: inputStr });
+    if (this.recentToolCalls.length > _Agent.MAX_RECENT_TOOL_CALLS) {
+      this.recentToolCalls.shift();
+    }
+    const duplicateCount = this.recentToolCalls.filter(
+      (call) => call.name === toolName && call.input === inputStr
+    ).length;
+    if (duplicateCount >= _Agent.LOOP_THRESHOLD) {
+      console.warn(`[Loop Detection] Tool "${toolName}" called ${duplicateCount} times with identical input. Stopping loop.`);
+      return true;
+    }
+    return false;
+  }
+  /**
+   * Clear the tool call loop tracking (call when starting a new user message)
+   */
+  clearToolCallLoopTracking() {
+    this.recentToolCalls = [];
+  }
   updateTokenUsage(usage, preCalculatedCost) {
     const model = this.config.model ?? DEFAULT_MODEL;
     this.cumulativeTokenUsage.inputTokens = usage.input_tokens;
@@ -5161,7 +5302,7 @@ Use /load <id> to load a session.`
     completedToolCalls.current = [];
     abortController.current = new AbortController();
     try {
-      const result = await agent.run(trimmed);
+      const result = await agent.run(trimmed, { abortSignal: abortController.current.signal });
       if (isInterrupted) {
         setMessages((prev) => [...prev, {
           role: "system",

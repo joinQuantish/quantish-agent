@@ -187,9 +187,44 @@ export async function runSetup(): Promise<boolean> {
   
   if (quantishKey) {
     console.log(chalk.dim(`Current trading key: ${quantishKey.slice(0, 12)}...`));
-    const action = await prompt('Keep current key (Enter), enter new key (n), or disable trading (d): ');
+    const action = await prompt('Keep (Enter), new key (n), create wallet (c), or disable (d): ');
     if (action.toLowerCase() === 'n') {
       quantishKey = await prompt('Enter your Quantish Trading API key: ', true);
+    } else if (action.toLowerCase() === 'c') {
+      // Create new wallet
+      console.log(chalk.dim('\nCreating a new wallet on Quantish Signing Server...'));
+      
+      const externalId = await prompt('Enter a unique identifier (e.g., email or username): ');
+      if (!externalId) {
+        console.log(chalk.red('Identifier is required to create an account.'));
+        console.log(chalk.dim('Keeping current key.\n'));
+      } else {
+        try {
+          const mcpClient = createMCPClient(config.getTradingMcpUrl(), '');
+          const result = await mcpClient.callTool('request_api_key', { externalId });
+          
+          if (result.success && typeof result.data === 'object' && result.data !== null) {
+            const data = result.data as Record<string, unknown>;
+            quantishKey = data.apiKey as string;
+            console.log(chalk.green('\n✓ New wallet created!'));
+            console.log(chalk.dim(`  EOA Address: ${data.eoaAddress}`));
+            console.log(chalk.dim('  (Your Safe wallet will deploy on first trade)\n'));
+            
+            if (data.apiSecret) {
+              console.log(chalk.yellow('⚠️  Save your API secret (shown only once):'));
+              console.log(chalk.bold.yellow(`   ${String(data.apiSecret)}`));
+              console.log();
+            }
+          } else {
+            console.log(chalk.red('Failed to create wallet: ' + (result.error || 'Unknown error')));
+            console.log(chalk.dim('Keeping current key.\n'));
+          }
+        } catch (error) {
+          console.log(chalk.red('Failed to connect to Quantish Trading Server.'));
+          console.log(chalk.dim(String(error)));
+          console.log(chalk.dim('Keeping current key.\n'));
+        }
+      }
     } else if (action.toLowerCase() === 'd') {
       quantishKey = undefined;
       skipTrading = true;
@@ -266,9 +301,43 @@ export async function runSetup(): Promise<boolean> {
   
   if (kalshiKey) {
     console.log(chalk.dim(`Current Kalshi key: ${kalshiKey.slice(0, 12)}...`));
-    const action = await prompt('Keep current key (Enter), enter new key (n), or disable Kalshi (d): ');
+    const action = await prompt('Keep (Enter), new key (n), create wallet (c), or disable (d): ');
     if (action.toLowerCase() === 'n') {
       kalshiKey = await prompt('Enter your Kalshi API key: ', true);
+    } else if (action.toLowerCase() === 'c') {
+      // Create new Kalshi wallet
+      console.log(chalk.dim('\nCreating a new Solana wallet on Kalshi MCP...'));
+      
+      const externalId = await prompt('Enter a unique identifier (e.g., email or username): ');
+      if (!externalId) {
+        console.log(chalk.red('Identifier is required to create an account.'));
+        console.log(chalk.dim('Keeping current key.\n'));
+      } else {
+        try {
+          const kalshiClient = createMCPClient(KALSHI_MCP_URL, '', 'kalshi');
+          const result = await kalshiClient.callTool('kalshi_signup', { externalId });
+          
+          if (result.success && typeof result.data === 'object' && result.data !== null) {
+            const data = result.data as Record<string, unknown>;
+            kalshiKey = data.apiKey as string;
+            console.log(chalk.green('\n✓ New Kalshi wallet created!'));
+            console.log(chalk.dim(`  Solana Address: ${data.walletAddress}`));
+            
+            if (data.apiSecret) {
+              console.log(chalk.yellow('\n⚠️  Save your API secret (shown only once):'));
+              console.log(chalk.bold.yellow(`   ${String(data.apiSecret)}`));
+              console.log();
+            }
+          } else {
+            console.log(chalk.red('Failed to create wallet: ' + (result.error || 'Unknown error')));
+            console.log(chalk.dim('Keeping current key.\n'));
+          }
+        } catch (error) {
+          console.log(chalk.red('Failed to connect to Kalshi MCP.'));
+          console.log(chalk.dim(String(error)));
+          console.log(chalk.dim('Keeping current key.\n'));
+        }
+      }
     } else if (action.toLowerCase() === 'd') {
       kalshiKey = undefined;
       skipKalshi = true;

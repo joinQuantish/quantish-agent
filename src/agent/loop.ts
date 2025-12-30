@@ -321,12 +321,17 @@ export interface AgentConfig {
   workingDirectory?: string;
   streaming?: boolean; // Enable streaming output
   contextEditing?: ContextEditConfig[]; // Server-side context editing rules
+  
+  // Abort handling - pass AbortSignal to cancel execution mid-loop
+  signal?: AbortSignal;
+  
   onToolCall?: (toolName: string, args: Record<string, unknown>) => void;
   onToolResult?: (toolName: string, result: unknown, success: boolean) => void;
   onText?: (text: string, isComplete: boolean) => void;
   onThinking?: (text: string) => void; // For extended thinking
   onStreamStart?: () => void;
-  onStreamEnd?: () => void;
+  onStreamEnd?(): void;
+  onAbort?: () => void; // Called when execution is aborted via signal
   onTokenUsage?: (usage: TokenUsage) => void; // Token usage after each response
 }
 
@@ -356,13 +361,17 @@ search_markets already returns prices, volume, and liquidity.
 
 ## Tools Available
 
-**Discovery MCP** (market data):
-- search_markets(query, limit=10) → Markets with prices from Polymarket/Kalshi/Limitless
-- get_market_details(platform, marketId) → Only when user asks about ONE specific market
+**Discovery MCP** (market data - prices included):
+- search_markets(query, limit=10) → Markets WITH prices from Polymarket/Kalshi/Limitless
+- get_market_details(platform, marketId) → Full details WITH prices for ONE market
 - get_trending_markets(limit=10) → Hot markets by volume
 
-**Polymarket Trading**:
-- place_order, cancel_order, get_orders, get_positions, get_balances, get_price, get_orderbook
+**Polymarket Trading** (requires conditionId from Discovery results):
+- place_order, cancel_order, get_orders, get_positions, get_balances
+- get_price(tokenId) → Live price (only if you need real-time, Discovery already has prices)
+- get_orderbook(tokenId) → Bid/ask depth
+
+NOTE: Don't use get_market - use get_market_details from Discovery instead.
 
 **Kalshi Trading** (via DFlow):
 - kalshi_buy_yes, kalshi_buy_no, kalshi_get_positions, kalshi_get_balances
@@ -374,10 +383,22 @@ search_markets already returns prices, volume, and liquidity.
 - get_process_output, list_processes, stop_process
 - git operations: status, diff, add, commit
 
+## CRITICAL: File Operations
+
+**NEVER repeat the same operation.** If write_file or edit_file fails:
+1. Stop and tell the user what went wrong
+2. Do NOT retry with the same content
+3. Do NOT delete and rewrite - use edit_file to fix specific issues
+
+When writing code files:
+- Write complete, valid code (not JSON-escaped strings)
+- Create one file at a time, verify it works
+- If you get stuck, ask the user for help
+
 ## Building Trading Bots
 
 When user wants to build an app or bot:
-1. Use coding tools to create files (write_file, edit_file)
+1. Create files one at a time with write_file
 2. The MCP servers are HTTP APIs - apps can call them directly
 3. Use start_background_process for dev servers
 4. API endpoints:
@@ -390,6 +411,7 @@ When user wants to build an app or bot:
 
 Be concise. Present results clearly. Wait for user input.`;
 
+
 export class Agent {
   private anthropic: Anthropic;
   private llmProvider?: LLMProvider;
@@ -399,6 +421,11 @@ export class Agent {
   private conversationHistory: MessageParam[] = [];
   private workingDirectory: string;
   private sessionCost: number = 0; // Cumulative cost for this session
+  
+  // Loop detection: track last N tool calls to detect loops
+  private recentToolCalls: Array<{ name: string; input: string }> = [];
+  private static MAX_RECENT_TOOL_CALLS = 5;
+  private static LOOP_THRESHOLD = 2; // Abort if same call appears this many times
   private cumulativeTokenUsage: TokenUsage = {
     inputTokens: 0,
     outputTokens: 0,
@@ -522,11 +549,23 @@ export class Agent {
       content: contextMessage,
     });
 
+    // Clear loop tracking for new user message
+    this.clearToolCallLoopTracking();
+
     const toolCalls: AgentResult['toolCalls'] = [];
     let iterations = 0;
     let finalText = '';
 
-    while (iterations < maxIterations) {
+    // Use maxTurns if specified, otherwise fall back to maxIterations
+    const maxTurns = this.config.maxTurns ?? maxIterations;
+
+    while (iterations < maxTurns) {
+      // Check abort signal at each iteration
+      if (this.config.abortSignal?.aborted) {
+        finalText += '\n\n[Operation cancelled by user]';
+        break;
+      }
+      
       iterations++;
       this.config.onStreamStart?.();
 
@@ -684,6 +723,22 @@ export class Agent {
     name: string,
     args: Record<string, unknown>
   ): Promise<{ result: unknown; source: 'local' | 'mcp' | 'discovery' | 'trading' }> {
+    // Check if abort signal was triggered
+    if (this.config.abortSignal?.aborted) {
+      return {
+        result: { error: 'Operation cancelled by user' },
+        source: 'local',
+      };
+    }
+    
+    // Check for tool call loops
+    if (this.checkToolCallLoop(name, args)) {
+      return {
+        result: { error: `Loop detected: "${name}" was called multiple times with the same input. Please try a different approach.` },
+        source: 'local',
+      };
+    }
+    
     // Check if it's a local tool
     if (isLocalTool(name)) {
       const result = await executeLocalTool(name, args);
@@ -720,9 +775,21 @@ export class Agent {
   }
 
   /**
+   * Set the abort signal for the current request (call before run())
+   */
+  setAbortSignal(signal: AbortSignal | undefined): void {
+    this.config.abortSignal = signal;
+  }
+  
+  /**
    * Run the agent with a user message (supports streaming)
    */
-  async run(userMessage: string): Promise<AgentResult> {
+  async run(userMessage: string, options?: { abortSignal?: AbortSignal }): Promise<AgentResult> {
+    // Set abort signal if provided in options
+    if (options?.abortSignal) {
+      this.config.abortSignal = options.abortSignal;
+    }
+    
     // Route to provider-specific implementation if using OpenRouter
     if (this.config.provider === 'openrouter') {
       return this.runWithProvider(userMessage);
@@ -752,11 +819,23 @@ export class Agent {
       content: contextMessage,
     });
 
+    // Clear loop tracking for new user message
+    this.clearToolCallLoopTracking();
+
     const toolCalls: AgentResult['toolCalls'] = [];
     let iterations = 0;
     let finalText = '';
 
-    while (iterations < maxIterations) {
+    // Use maxTurns if specified, otherwise fall back to maxIterations
+    const maxTurns = this.config.maxTurns ?? maxIterations;
+
+    while (iterations < maxTurns) {
+      // Check abort signal at each iteration
+      if (this.config.abortSignal?.aborted) {
+        finalText += '\n\n[Operation cancelled by user]';
+        break;
+      }
+      
       iterations++;
       this.config.onStreamStart?.();
 
@@ -1026,6 +1105,43 @@ export class Agent {
    * @param usage - Token counts from the API response
    * @param preCalculatedCost - Optional pre-calculated cost (from OpenRouter provider)
    */
+  
+  /**
+   * Check if a tool call would create a loop (same call repeated too many times).
+   * Returns true if this call is part of a loop and should be stopped.
+   */
+  private checkToolCallLoop(toolName: string, input: Record<string, unknown>): boolean {
+    const inputStr = JSON.stringify(input);
+    const callSignature = `${toolName}:${inputStr}`;
+    
+    // Add to recent calls
+    this.recentToolCalls.push({ name: toolName, input: inputStr });
+    
+    // Keep only last N calls
+    if (this.recentToolCalls.length > Agent.MAX_RECENT_TOOL_CALLS) {
+      this.recentToolCalls.shift();
+    }
+    
+    // Count how many times this exact call appears in recent history
+    const duplicateCount = this.recentToolCalls.filter(
+      call => call.name === toolName && call.input === inputStr
+    ).length;
+    
+    if (duplicateCount >= Agent.LOOP_THRESHOLD) {
+      console.warn(`[Loop Detection] Tool "${toolName}" called ${duplicateCount} times with identical input. Stopping loop.`);
+      return true;
+    }
+    
+    return false;
+  }
+  
+  /**
+   * Clear the tool call loop tracking (call when starting a new user message)
+   */
+  private clearToolCallLoopTracking(): void {
+    this.recentToolCalls = [];
+  }
+  
   private updateTokenUsage(
     usage: { input_tokens: number; output_tokens: number; cache_creation_input_tokens?: number | null; cache_read_input_tokens?: number | null },
     preCalculatedCost?: CostBreakdown

@@ -686,7 +686,7 @@ Last API Call Cost:
     abortController.current = new AbortController();
 
     try {
-      const result = await agent.run(trimmed);
+      const result = await agent.run(trimmed, { abortSignal: abortController.current.signal });
       
       // Check if we were interrupted
       if (isInterrupted) {

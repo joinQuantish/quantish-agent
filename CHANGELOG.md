@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.44] - 2024-12-30
+
+### Added
+- **AbortSignal Support**: Escape key now properly cancels agent execution mid-loop
+  - New `abortSignal` option in `agent.run()` for programmatic cancellation
+  - Checks abort status at each iteration and during tool execution
+  
+- **Tool Call Loop Detection**: Prevents agent from getting stuck in loops
+  - Detects when the same tool is called 3+ times with identical input
+  - Automatically stops loop and returns helpful error message
+  
+- **maxTurns Config Option**: Limit total agent turns per request (defaults to 15/200)
+
+### Fixed
+- Escape key interrupt now works immediately during agent processing
+- Agent no longer repeats failed tool calls indefinitely
+
 ## [0.1.42] - 2024-12-30
 
 ### Fixed
