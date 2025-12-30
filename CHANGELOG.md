@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.47] - 2024-12-30
+
+### Added
+- **`workspace_summary` Tool**: New tool to get a tree-view of directory structure after scaffolding
+  - Shows file sizes, skips node_modules/.git/dist
+  - Perfect for verifying project creation after `npx create-react-app`, etc.
+
+### Fixed
+- **Extended Timeouts for Scaffolding Commands**: Fixed `npx create-react-app` and similar commands timing out
+  - Added 10-minute timeout for scaffolding: `npx create-*`, `bunx create-*`, `pnpm create`, `yarn create`
+  - Added 3-minute default for all `npx` commands
+  - Prevents agent getting stuck on long-running project creation
+
+### Improved
+- **Better Tool Descriptions**: Clearer guidance on when to use `run_command` vs `start_background_process`
+- **System Prompt for App Building**: Added explicit instructions for building applications
+  - Use `--yes` flag for npx commands
+  - Verify with `workspace_summary` after scaffolding
+  - Use background processes for dev servers
+
 ## [0.1.45] - 2024-12-30
 
 ### Fixed

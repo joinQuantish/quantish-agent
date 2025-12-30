@@ -198,6 +198,8 @@ const ACTIONABLE_FIELDS = new Set([
   'active', 'closed', 'status', 'endDate',
   // Platform (for multi-platform support)
   'platform',
+  // Nested structures containing price data (Discovery MCP response)
+  'markets', 'outcomes',
 ]);
 
 /**
@@ -323,7 +325,10 @@ export interface AgentConfig {
   contextEditing?: ContextEditConfig[]; // Server-side context editing rules
   
   // Abort handling - pass AbortSignal to cancel execution mid-loop
-  signal?: AbortSignal;
+  abortSignal?: AbortSignal;
+  
+  // Max turns per request (prevents runaway loops)
+  maxTurns?: number;
   
   onToolCall?: (toolName: string, args: Record<string, unknown>) => void;
   onToolResult?: (toolName: string, result: unknown, success: boolean) => void;
@@ -347,71 +352,25 @@ export interface AgentResult {
   tokenUsage: TokenUsage;
 }
 
-const DEFAULT_SYSTEM_PROMPT = `You are Quantish, an AI trading agent for prediction markets.
+const DEFAULT_SYSTEM_PROMPT = `You are Quantish, an AI trading agent for prediction markets (Polymarket, Kalshi).
 
-## CRITICAL: Efficient Market Searching
+You have tools to search markets and place trades. When showing market data, display ALL relevant information from the response including prices/probabilities.
 
-When user asks to find markets:
-1. Call search_markets ONCE with a good query
-2. Present results in a table that INCLUDES PRICES from the response:
-   | Market | Yes Price | No Price | Volume | End Date |
-   The response has: markets[].markets[].outcomes[].price (0.05 = 5% probability)
-3. STOP. Wait for user to ask for more.
+## Building Applications
 
-**DO NOT** make multiple searches or call get_market_details on every result.
-search_markets already returns prices, volume, resolution criteria, and outcome probabilities.
+When asked to create applications or projects:
 
-## Tools Available
+1. **Use run_command for scaffolding** - Commands like \`npx create-react-app\` or \`npm create vite\` are automatically given 10 minutes to complete. Always add \`--yes\` flag to skip prompts.
 
-**Discovery MCP** (market data - prices included):
-- search_markets(query, limit=10) → Markets WITH prices from Polymarket/Kalshi/Limitless
-- get_market_details(platform, marketId) → Full details WITH prices for ONE market
-- get_trending_markets(limit=10) → Hot markets by volume
+2. **Verify after creation** - After scaffolding completes, use \`workspace_summary\` to see the file tree and confirm the project was created correctly.
 
-**Polymarket Trading** (requires conditionId from Discovery results):
-- place_order, cancel_order, get_orders, get_positions, get_balances
-- get_price(tokenId) → Live price (only if you need real-time, Discovery already has prices)
-- get_orderbook(tokenId) → Bid/ask depth
+3. **Use start_background_process for dev servers** - After the app is built, use this for \`npm start\`, \`npm run dev\`, etc. These run indefinitely until stopped.
 
-NOTE: Don't use get_market - use get_market_details from Discovery instead.
+4. **Read files before editing** - Always use \`read_file\` before \`edit_file\` to understand the existing code structure.
 
-**Kalshi Trading** (via DFlow):
-- kalshi_buy_yes, kalshi_buy_no, kalshi_get_positions, kalshi_get_balances
+5. **Test incrementally** - After making changes, run the app and verify it works before making more changes.
 
-**Coding Tools** (for building apps/bots):
-- read_file, write_file, edit_file, list_dir, grep, find_files
-- run_command (blocking) - for npm install, build commands
-- start_background_process (non-blocking) - for dev servers, watch mode
-- get_process_output, list_processes, stop_process
-- git operations: status, diff, add, commit
-
-## CRITICAL: File Operations
-
-**NEVER repeat the same operation.** If write_file or edit_file fails:
-1. Stop and tell the user what went wrong
-2. Do NOT retry with the same content
-3. Do NOT delete and rewrite - use edit_file to fix specific issues
-
-When writing code files:
-- Write complete, valid code (not JSON-escaped strings)
-- Create one file at a time, verify it works
-- If you get stuck, ask the user for help
-
-## Building Trading Bots
-
-When user wants to build an app or bot:
-1. Create files one at a time with write_file
-2. The MCP servers are HTTP APIs - apps can call them directly
-3. Use start_background_process for dev servers
-4. API endpoints:
-   - Discovery: https://discovery-mcp-production.up.railway.app (read-only, public)
-   - Trading: https://quantish-mcp-production.up.railway.app (requires API key)
-
-## Prices
-- Polymarket: 0.01-0.99 (probability)
-- Kalshi: percentages like 5% YES
-
-Be concise. Present results clearly. Wait for user input.`;
+Be concise and helpful.`;
 
 
 export class Agent {
@@ -799,7 +758,7 @@ export class Agent {
     
     const maxIterations = this.config.maxIterations ?? 15;
     // Model should be passed from ConfigManager.getModel() which handles provider-specific defaults
-    const model = this.config.model ?? (this.config.provider === 'openrouter' ? 'z-ai/glm-4.7' : 'claude-sonnet-4-5-20250929');
+    const model = this.config.model ?? 'claude-sonnet-4-5-20250929';
     const maxTokens = this.config.maxTokens ?? 8192;
     const systemPrompt = this.config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
     const useStreaming = this.config.streaming ?? true;

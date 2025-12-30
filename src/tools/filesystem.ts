@@ -141,6 +141,90 @@ export async function fileExists(filePath: string): Promise<LocalToolResult> {
 }
 
 /**
+ * Get a workspace summary - tree structure of directory with file info
+ * Useful after scaffolding to understand what was created
+ */
+export async function workspaceSummary(
+  dirPath: string,
+  options?: { maxDepth?: number; maxFiles?: number }
+): Promise<LocalToolResult> {
+  const maxDepth = options?.maxDepth ?? 3;
+  const maxFiles = options?.maxFiles ?? 100;
+
+  try {
+    const resolvedPath = path.resolve(dirPath);
+    
+    if (!existsSync(resolvedPath)) {
+      return { success: false, error: `Directory not found: ${dirPath}` };
+    }
+
+    const tree: string[] = [];
+    let fileCount = 0;
+    let dirCount = 0;
+    
+    // Directories to skip (common large/generated directories)
+    const skipDirs = new Set(['node_modules', '.git', 'dist', 'build', '.next', '__pycache__', 'venv', '.venv', 'target']);
+
+    async function walkDir(currentPath: string, prefix: string, depth: number): Promise<void> {
+      if (depth > maxDepth || fileCount >= maxFiles) return;
+      
+      const entries = await fs.readdir(currentPath, { withFileTypes: true });
+      
+      // Sort: directories first, then files
+      entries.sort((a, b) => {
+        if (a.isDirectory() === b.isDirectory()) return a.name.localeCompare(b.name);
+        return a.isDirectory() ? -1 : 1;
+      });
+      
+      for (let i = 0; i < entries.length && fileCount < maxFiles; i++) {
+        const entry = entries[i];
+        const isLast = i === entries.length - 1;
+        const connector = isLast ? '└── ' : '├── ';
+        const newPrefix = isLast ? prefix + '    ' : prefix + '│   ';
+        
+        if (entry.isDirectory()) {
+          if (skipDirs.has(entry.name)) {
+            tree.push(`${prefix}${connector}${entry.name}/ (skipped)`);
+          } else {
+            dirCount++;
+            tree.push(`${prefix}${connector}${entry.name}/`);
+            await walkDir(path.join(currentPath, entry.name), newPrefix, depth + 1);
+          }
+        } else {
+          fileCount++;
+          const filePath = path.join(currentPath, entry.name);
+          const stats = await fs.stat(filePath);
+          const size = stats.size < 1024 
+            ? `${stats.size}B` 
+            : stats.size < 1024 * 1024 
+              ? `${Math.round(stats.size / 1024)}KB`
+              : `${Math.round(stats.size / (1024 * 1024))}MB`;
+          tree.push(`${prefix}${connector}${entry.name} (${size})`);
+        }
+      }
+    }
+
+    tree.push(path.basename(resolvedPath) + '/');
+    await walkDir(resolvedPath, '', 1);
+
+    return {
+      success: true,
+      data: {
+        path: resolvedPath,
+        tree: tree.join('\n'),
+        stats: {
+          totalFiles: fileCount,
+          totalDirectories: dirCount,
+          truncated: fileCount >= maxFiles,
+        },
+      },
+    };
+  } catch (error) {
+    return { success: false, error: `Failed to summarize workspace: ${error instanceof Error ? error.message : String(error)}` };
+  }
+}
+
+/**
  * Edit a file using search/replace
  * This is safer than full overwrite as it only modifies specific parts
  */
@@ -310,6 +394,35 @@ export const filesystemTools: Tool[] = [
       required: ['path', 'old_string', 'new_string'],
     },
   },
+  {
+    name: 'workspace_summary',
+    description: `Get a tree-view summary of a directory. Perfect for understanding project structure after scaffolding or cloning.
+
+Automatically skips: node_modules, .git, dist, build, .next, __pycache__, venv
+
+Shows file sizes and provides a quick overview. Use this after:
+- Running npx create-react-app, npm create vite, etc.
+- Cloning a repo
+- Any command that creates multiple files`,
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        path: {
+          type: 'string',
+          description: 'The directory path to summarize',
+        },
+        max_depth: {
+          type: 'number',
+          description: 'Optional: Maximum depth to traverse (default: 3)',
+        },
+        max_files: {
+          type: 'number',
+          description: 'Optional: Maximum files to show (default: 100)',
+        },
+      },
+      required: ['path'],
+    },
+  },
 ];
 
 /**
@@ -337,6 +450,11 @@ export async function executeFilesystemTool(name: string, args: Record<string, u
         args.new_string as string,
         { replaceAll: args.replace_all as boolean | undefined }
       );
+    case 'workspace_summary':
+      return workspaceSummary(args.path as string, {
+        maxDepth: args.max_depth as number | undefined,
+        maxFiles: args.max_files as number | undefined,
+      });
     default:
       return { success: false, error: `Unknown filesystem tool: ${name}` };
   }

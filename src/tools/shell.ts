@@ -47,11 +47,25 @@ const PACKAGE_MANAGER_PATTERNS = [
   /^go\s+(build|get|mod)/,
 ];
 
-// Commands that are typically long-running
+// Scaffolding commands that create new projects - need extra long timeouts (10 min)
+// These download templates, install deps, and can take several minutes
+const SCAFFOLDING_PATTERNS = [
+  /^npx\s+(--yes\s+)?create-/,           // npx create-react-app, npx create-next-app
+  /^npx\s+(--yes\s+)?@\w+\/create-/,     // npx @vue/create-app, etc.
+  /^bunx\s+create-/,                      // bunx create-react-app
+  /^pnpm\s+(dlx\s+)?create-/,            // pnpm create vite
+  /^npm\s+create\s+/,                     // npm create vite@latest
+  /^yarn\s+create\s+/,                    // yarn create react-app
+  /^npx\s+degit/,                         // npx degit for templates
+  /^npx\s+(--yes\s+)?(vite|astro|nuxt|remix|svelte)/,  // Direct scaffolding
+];
+
+// Commands that are typically long-running (3 min timeout)
 const LONG_RUNNING_PATTERNS = [
   /^(npm|yarn|pnpm|bun)\s+(build|test|run)/,
   /webpack|vite|esbuild|rollup/,
   /docker\s+(build|pull|push)/,
+  /^npx\s+/,  // Most npx commands need more time than 30s default
 ];
 
 /**
@@ -61,6 +75,13 @@ function getSmartTimeout(command: string, explicitTimeout?: number): number {
   // If user specified a timeout, use it
   if (explicitTimeout !== undefined) {
     return explicitTimeout;
+  }
+
+  // Scaffolding commands get 10 minutes (they download templates AND install deps)
+  for (const pattern of SCAFFOLDING_PATTERNS) {
+    if (pattern.test(command)) {
+      return 600000; // 10 minutes
+    }
   }
 
   // Package managers get 5 minutes
@@ -280,7 +301,19 @@ export async function findFiles(
 export const shellTools: Tool[] = [
   {
     name: 'run_command',
-    description: 'Execute a shell command on the local machine. Returns stdout, stderr, and exit code. Some dangerous commands are blocked for safety. Supports compound commands (&&, ||). Smart timeout: 5 min for npm/yarn install, 3 min for builds, 30s default. For dev servers or long-running processes, use start_background_process instead.',
+    description: `Execute a shell command on the local machine. Returns stdout, stderr, and exit code. 
+
+SMART TIMEOUTS (auto-detected):
+- 10 min: npx create-react-app, npm create vite, etc (scaffolding)
+- 5 min: npm install, yarn add, pip install (package installs)
+- 3 min: npm build, webpack, docker build (build commands)
+- 30 sec: all other commands
+
+BEST PRACTICES:
+- For dev servers (npm start, npm run dev), use start_background_process instead
+- After creating a project, use list_dir to verify the files were created
+- Add --yes to npx commands to skip prompts (e.g., "npx --yes create-react-app myapp")
+- Compound commands (&&, ||, |) are supported`,
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -294,7 +327,7 @@ export const shellTools: Tool[] = [
         },
         timeout: {
           type: 'number',
-          description: 'Optional: Timeout in milliseconds. Smart defaults: 300000 for npm install, 180000 for builds, 30000 for quick commands.',
+          description: 'Optional: Override timeout in milliseconds. Usually not needed - smart defaults handle most cases.',
         },
       },
       required: ['command'],
@@ -346,7 +379,20 @@ export const shellTools: Tool[] = [
   },
   {
     name: 'start_background_process',
-    description: 'Start a long-running process (like a dev server) in the background. The process runs independently and its output is captured. Returns a process ID that can be used to stop it later. Use this for: npm start, npm run dev, python servers, watch mode commands, etc.',
+    description: `Start a long-running process in the background. Returns immediately with a process ID.
+
+USE THIS FOR (runs indefinitely):
+- Dev servers: npm start, npm run dev, yarn dev
+- Watch modes: npm run watch, tsc --watch
+- Local servers: python -m http.server, serve -s build
+- Database servers: mongod, redis-server
+
+DO NOT USE FOR (use run_command instead):
+- One-time installs: npm install, pip install
+- Project scaffolding: npx create-react-app
+- Build commands: npm run build
+
+Returns a process ID to use with stop_process and get_process_output.`,
     input_schema: {
       type: 'object' as const,
       properties: {

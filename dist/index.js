@@ -1052,6 +1052,65 @@ async function fileExists(filePath) {
     return { success: false, error: `Failed to check file: ${error2 instanceof Error ? error2.message : String(error2)}` };
   }
 }
+async function workspaceSummary(dirPath, options) {
+  const maxDepth = options?.maxDepth ?? 3;
+  const maxFiles = options?.maxFiles ?? 100;
+  try {
+    const resolvedPath = path.resolve(dirPath);
+    if (!existsSync(resolvedPath)) {
+      return { success: false, error: `Directory not found: ${dirPath}` };
+    }
+    const tree = [];
+    let fileCount = 0;
+    let dirCount = 0;
+    const skipDirs = /* @__PURE__ */ new Set(["node_modules", ".git", "dist", "build", ".next", "__pycache__", "venv", ".venv", "target"]);
+    async function walkDir(currentPath, prefix, depth) {
+      if (depth > maxDepth || fileCount >= maxFiles) return;
+      const entries = await fs.readdir(currentPath, { withFileTypes: true });
+      entries.sort((a, b) => {
+        if (a.isDirectory() === b.isDirectory()) return a.name.localeCompare(b.name);
+        return a.isDirectory() ? -1 : 1;
+      });
+      for (let i = 0; i < entries.length && fileCount < maxFiles; i++) {
+        const entry = entries[i];
+        const isLast = i === entries.length - 1;
+        const connector = isLast ? "\u2514\u2500\u2500 " : "\u251C\u2500\u2500 ";
+        const newPrefix = isLast ? prefix + "    " : prefix + "\u2502   ";
+        if (entry.isDirectory()) {
+          if (skipDirs.has(entry.name)) {
+            tree.push(`${prefix}${connector}${entry.name}/ (skipped)`);
+          } else {
+            dirCount++;
+            tree.push(`${prefix}${connector}${entry.name}/`);
+            await walkDir(path.join(currentPath, entry.name), newPrefix, depth + 1);
+          }
+        } else {
+          fileCount++;
+          const filePath = path.join(currentPath, entry.name);
+          const stats = await fs.stat(filePath);
+          const size = stats.size < 1024 ? `${stats.size}B` : stats.size < 1024 * 1024 ? `${Math.round(stats.size / 1024)}KB` : `${Math.round(stats.size / (1024 * 1024))}MB`;
+          tree.push(`${prefix}${connector}${entry.name} (${size})`);
+        }
+      }
+    }
+    tree.push(path.basename(resolvedPath) + "/");
+    await walkDir(resolvedPath, "", 1);
+    return {
+      success: true,
+      data: {
+        path: resolvedPath,
+        tree: tree.join("\n"),
+        stats: {
+          totalFiles: fileCount,
+          totalDirectories: dirCount,
+          truncated: fileCount >= maxFiles
+        }
+      }
+    };
+  } catch (error2) {
+    return { success: false, error: `Failed to summarize workspace: ${error2 instanceof Error ? error2.message : String(error2)}` };
+  }
+}
 async function editFile(filePath, oldString, newString, options) {
   try {
     const resolvedPath = path.resolve(filePath);
@@ -1194,6 +1253,35 @@ var filesystemTools = [
       },
       required: ["path", "old_string", "new_string"]
     }
+  },
+  {
+    name: "workspace_summary",
+    description: `Get a tree-view summary of a directory. Perfect for understanding project structure after scaffolding or cloning.
+
+Automatically skips: node_modules, .git, dist, build, .next, __pycache__, venv
+
+Shows file sizes and provides a quick overview. Use this after:
+- Running npx create-react-app, npm create vite, etc.
+- Cloning a repo
+- Any command that creates multiple files`,
+    input_schema: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description: "The directory path to summarize"
+        },
+        max_depth: {
+          type: "number",
+          description: "Optional: Maximum depth to traverse (default: 3)"
+        },
+        max_files: {
+          type: "number",
+          description: "Optional: Maximum files to show (default: 100)"
+        }
+      },
+      required: ["path"]
+    }
   }
 ];
 async function executeFilesystemTool(name, args) {
@@ -1218,6 +1306,11 @@ async function executeFilesystemTool(name, args) {
         args.new_string,
         { replaceAll: args.replace_all }
       );
+    case "workspace_summary":
+      return workspaceSummary(args.path, {
+        maxDepth: args.max_depth,
+        maxFiles: args.max_files
+      });
     default:
       return { success: false, error: `Unknown filesystem tool: ${name}` };
   }
@@ -1434,14 +1527,39 @@ var PACKAGE_MANAGER_PATTERNS = [
   /^cargo\s+(build|install)/,
   /^go\s+(build|get|mod)/
 ];
+var SCAFFOLDING_PATTERNS = [
+  /^npx\s+(--yes\s+)?create-/,
+  // npx create-react-app, npx create-next-app
+  /^npx\s+(--yes\s+)?@\w+\/create-/,
+  // npx @vue/create-app, etc.
+  /^bunx\s+create-/,
+  // bunx create-react-app
+  /^pnpm\s+(dlx\s+)?create-/,
+  // pnpm create vite
+  /^npm\s+create\s+/,
+  // npm create vite@latest
+  /^yarn\s+create\s+/,
+  // yarn create react-app
+  /^npx\s+degit/,
+  // npx degit for templates
+  /^npx\s+(--yes\s+)?(vite|astro|nuxt|remix|svelte)/
+  // Direct scaffolding
+];
 var LONG_RUNNING_PATTERNS = [
   /^(npm|yarn|pnpm|bun)\s+(build|test|run)/,
   /webpack|vite|esbuild|rollup/,
-  /docker\s+(build|pull|push)/
+  /docker\s+(build|pull|push)/,
+  /^npx\s+/
+  // Most npx commands need more time than 30s default
 ];
 function getSmartTimeout(command, explicitTimeout) {
   if (explicitTimeout !== void 0) {
     return explicitTimeout;
+  }
+  for (const pattern of SCAFFOLDING_PATTERNS) {
+    if (pattern.test(command)) {
+      return 6e5;
+    }
   }
   for (const pattern of PACKAGE_MANAGER_PATTERNS) {
     if (pattern.test(command)) {
@@ -1602,7 +1720,19 @@ async function findFiles(pattern, directory = ".") {
 var shellTools = [
   {
     name: "run_command",
-    description: "Execute a shell command on the local machine. Returns stdout, stderr, and exit code. Some dangerous commands are blocked for safety. Supports compound commands (&&, ||). Smart timeout: 5 min for npm/yarn install, 3 min for builds, 30s default. For dev servers or long-running processes, use start_background_process instead.",
+    description: `Execute a shell command on the local machine. Returns stdout, stderr, and exit code. 
+
+SMART TIMEOUTS (auto-detected):
+- 10 min: npx create-react-app, npm create vite, etc (scaffolding)
+- 5 min: npm install, yarn add, pip install (package installs)
+- 3 min: npm build, webpack, docker build (build commands)
+- 30 sec: all other commands
+
+BEST PRACTICES:
+- For dev servers (npm start, npm run dev), use start_background_process instead
+- After creating a project, use list_dir to verify the files were created
+- Add --yes to npx commands to skip prompts (e.g., "npx --yes create-react-app myapp")
+- Compound commands (&&, ||, |) are supported`,
     input_schema: {
       type: "object",
       properties: {
@@ -1616,7 +1746,7 @@ var shellTools = [
         },
         timeout: {
           type: "number",
-          description: "Optional: Timeout in milliseconds. Smart defaults: 300000 for npm install, 180000 for builds, 30000 for quick commands."
+          description: "Optional: Override timeout in milliseconds. Usually not needed - smart defaults handle most cases."
         }
       },
       required: ["command"]
@@ -1668,7 +1798,20 @@ var shellTools = [
   },
   {
     name: "start_background_process",
-    description: "Start a long-running process (like a dev server) in the background. The process runs independently and its output is captured. Returns a process ID that can be used to stop it later. Use this for: npm start, npm run dev, python servers, watch mode commands, etc.",
+    description: `Start a long-running process in the background. Returns immediately with a process ID.
+
+USE THIS FOR (runs indefinitely):
+- Dev servers: npm start, npm run dev, yarn dev
+- Watch modes: npm run watch, tsc --watch
+- Local servers: python -m http.server, serve -s build
+- Database servers: mongod, redis-server
+
+DO NOT USE FOR (use run_command instead):
+- One-time installs: npm install, pip install
+- Project scaffolding: npx create-react-app
+- Build commands: npm run build
+
+Returns a process ID to use with stop_process and get_process_output.`,
     input_schema: {
       type: "object",
       properties: {
@@ -3570,7 +3713,10 @@ var ACTIONABLE_FIELDS = /* @__PURE__ */ new Set([
   "status",
   "endDate",
   // Platform (for multi-platform support)
-  "platform"
+  "platform",
+  // Nested structures containing price data (Discovery MCP response)
+  "markets",
+  "outcomes"
 ]);
 var SUMMARY_FIELDS = /* @__PURE__ */ new Set([
   "volume",
@@ -3643,71 +3789,25 @@ function extractTokenInfo(token) {
     price: token.price ?? token.probability
   };
 }
-var DEFAULT_SYSTEM_PROMPT = `You are Quantish, an AI trading agent for prediction markets.
+var DEFAULT_SYSTEM_PROMPT = `You are Quantish, an AI trading agent for prediction markets (Polymarket, Kalshi).
 
-## CRITICAL: Efficient Market Searching
+You have tools to search markets and place trades. When showing market data, display ALL relevant information from the response including prices/probabilities.
 
-When user asks to find markets:
-1. Call search_markets ONCE with a good query
-2. Present results in a table that INCLUDES PRICES from the response:
-   | Market | Yes Price | No Price | Volume | End Date |
-   The response has: markets[].markets[].outcomes[].price (0.05 = 5% probability)
-3. STOP. Wait for user to ask for more.
+## Building Applications
 
-**DO NOT** make multiple searches or call get_market_details on every result.
-search_markets already returns prices, volume, resolution criteria, and outcome probabilities.
+When asked to create applications or projects:
 
-## Tools Available
+1. **Use run_command for scaffolding** - Commands like \`npx create-react-app\` or \`npm create vite\` are automatically given 10 minutes to complete. Always add \`--yes\` flag to skip prompts.
 
-**Discovery MCP** (market data - prices included):
-- search_markets(query, limit=10) \u2192 Markets WITH prices from Polymarket/Kalshi/Limitless
-- get_market_details(platform, marketId) \u2192 Full details WITH prices for ONE market
-- get_trending_markets(limit=10) \u2192 Hot markets by volume
+2. **Verify after creation** - After scaffolding completes, use \`workspace_summary\` to see the file tree and confirm the project was created correctly.
 
-**Polymarket Trading** (requires conditionId from Discovery results):
-- place_order, cancel_order, get_orders, get_positions, get_balances
-- get_price(tokenId) \u2192 Live price (only if you need real-time, Discovery already has prices)
-- get_orderbook(tokenId) \u2192 Bid/ask depth
+3. **Use start_background_process for dev servers** - After the app is built, use this for \`npm start\`, \`npm run dev\`, etc. These run indefinitely until stopped.
 
-NOTE: Don't use get_market - use get_market_details from Discovery instead.
+4. **Read files before editing** - Always use \`read_file\` before \`edit_file\` to understand the existing code structure.
 
-**Kalshi Trading** (via DFlow):
-- kalshi_buy_yes, kalshi_buy_no, kalshi_get_positions, kalshi_get_balances
+5. **Test incrementally** - After making changes, run the app and verify it works before making more changes.
 
-**Coding Tools** (for building apps/bots):
-- read_file, write_file, edit_file, list_dir, grep, find_files
-- run_command (blocking) - for npm install, build commands
-- start_background_process (non-blocking) - for dev servers, watch mode
-- get_process_output, list_processes, stop_process
-- git operations: status, diff, add, commit
-
-## CRITICAL: File Operations
-
-**NEVER repeat the same operation.** If write_file or edit_file fails:
-1. Stop and tell the user what went wrong
-2. Do NOT retry with the same content
-3. Do NOT delete and rewrite - use edit_file to fix specific issues
-
-When writing code files:
-- Write complete, valid code (not JSON-escaped strings)
-- Create one file at a time, verify it works
-- If you get stuck, ask the user for help
-
-## Building Trading Bots
-
-When user wants to build an app or bot:
-1. Create files one at a time with write_file
-2. The MCP servers are HTTP APIs - apps can call them directly
-3. Use start_background_process for dev servers
-4. API endpoints:
-   - Discovery: https://discovery-mcp-production.up.railway.app (read-only, public)
-   - Trading: https://quantish-mcp-production.up.railway.app (requires API key)
-
-## Prices
-- Polymarket: 0.01-0.99 (probability)
-- Kalshi: percentages like 5% YES
-
-Be concise. Present results clearly. Wait for user input.`;
+Be concise and helpful.`;
 var Agent = class _Agent {
   anthropic;
   llmProvider;
@@ -4008,7 +4108,7 @@ ${userMessage}`;
       return this.runWithProvider(userMessage);
     }
     const maxIterations = this.config.maxIterations ?? 15;
-    const model = this.config.model ?? (this.config.provider === "openrouter" ? "z-ai/glm-4.7" : "claude-sonnet-4-5-20250929");
+    const model = this.config.model ?? "claude-sonnet-4-5-20250929";
     const maxTokens = this.config.maxTokens ?? 8192;
     const systemPrompt = this.config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
     const useStreaming = this.config.streaming ?? true;
