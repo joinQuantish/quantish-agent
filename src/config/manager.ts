@@ -56,11 +56,11 @@ const schema = {
   },
   model: {
     type: 'string' as const,
-    default: 'claude-sonnet-4-5-20250929',
+    // No default here - getModel() returns provider-specific default
   },
   provider: {
     type: 'string' as const,
-    default: 'anthropic',
+    default: 'openrouter', // OpenRouter is recommended for new users
   },
 };
 

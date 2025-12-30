@@ -19,7 +19,7 @@ import { localTools, processManager } from './tools/index.js';
 import * as ui from './ui/index.js';
 import { App } from './ui/App.js';
 
-const VERSION = '0.1.29';
+const VERSION = '0.1.36';
 
 /**
  * Cleanup function to kill all background processes on exit

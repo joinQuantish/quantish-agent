@@ -35,12 +35,13 @@ var schema = {
     default: DEFAULT_MCP_URL
   },
   model: {
-    type: "string",
-    default: "claude-sonnet-4-5-20250929"
+    type: "string"
+    // No default here - getModel() returns provider-specific default
   },
   provider: {
     type: "string",
-    default: "anthropic"
+    default: "openrouter"
+    // OpenRouter is recommended for new users
   }
 };
 var ConfigManager = class {
@@ -251,27 +252,18 @@ var MCPClient = class {
     if (this.toolsCache) {
       return this.toolsCache;
     }
+    const headers = {
+      "Content-Type": "application/json"
+    };
     if (this.source === "discovery") {
-      const response2 = await fetch(`${this.baseUrl}/tools`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          "X-API-Key": this.apiKey
-        }
-      });
-      if (!response2.ok) {
-        throw new Error(`MCP server error: ${response2.status} ${response2.statusText}`);
-      }
-      const data2 = await response2.json();
-      this.toolsCache = data2.tools || [];
-      return this.toolsCache;
+      headers["Accept"] = "application/json, text/event-stream";
+      headers["X-API-Key"] = this.apiKey;
+    } else {
+      headers["x-api-key"] = this.apiKey;
     }
     const response = await fetch(this.baseUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": this.apiKey
-      },
+      headers,
       body: JSON.stringify({
         jsonrpc: "2.0",
         method: "tools/list",
@@ -292,45 +284,21 @@ var MCPClient = class {
   }
   /**
    * Call a tool on the MCP server
-   * Discovery MCP uses REST endpoints, Trading MCP uses JSON-RPC
+   * All MCPs use JSON-RPC format
    */
   async callTool(name, args) {
+    const headers = {
+      "Content-Type": "application/json"
+    };
     if (this.source === "discovery") {
-      const response2 = await fetch(`${this.baseUrl}/execute`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-API-Key": this.apiKey
-        },
-        body: JSON.stringify({
-          name,
-          arguments: args
-        })
-      });
-      if (!response2.ok) {
-        return {
-          success: false,
-          error: `MCP server error: ${response2.status} ${response2.statusText}`
-        };
-      }
-      const data2 = await response2.json();
-      if (data2.error) {
-        return {
-          success: false,
-          error: typeof data2.error === "string" ? data2.error : JSON.stringify(data2.error)
-        };
-      }
-      return {
-        success: true,
-        data: data2.data ?? data2.result ?? data2
-      };
+      headers["Accept"] = "application/json, text/event-stream";
+      headers["X-API-Key"] = this.apiKey;
+    } else {
+      headers["x-api-key"] = this.apiKey;
     }
     const response = await fetch(this.baseUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": this.apiKey
-      },
+      headers,
       body: JSON.stringify({
         jsonrpc: "2.0",
         method: "tools/call",
@@ -456,10 +424,22 @@ var MCPClientManager = class {
     } catch (error2) {
       console.warn("Failed to fetch Discovery MCP tools:", error2);
     }
+    const discoverySearchTools = /* @__PURE__ */ new Set([
+      "search_markets",
+      "get_market_details",
+      "get_trending_markets",
+      "get_categories",
+      "get_market_stats",
+      "get_search_status",
+      "find_arbitrage"
+    ]);
     if (this.tradingClient) {
       try {
         const tradingTools = await this.tradingClient.listTools();
         for (const tool of tradingTools) {
+          if (discoverySearchTools.has(tool.name)) {
+            continue;
+          }
           allTools.push({ ...tool, source: "trading" });
           this.toolSourceMap.set(tool.name, "trading");
         }
@@ -630,15 +610,18 @@ async function runSetup() {
   console.log();
   console.log(chalk.bold("Step 1: Choose your LLM Provider"));
   console.log(chalk.dim("The AI that powers the agent.\n"));
-  console.log("  1. " + chalk.cyan("Anthropic") + chalk.dim(" (Claude models - Opus, Sonnet, Haiku)"));
-  console.log("  2. " + chalk.green("OpenRouter") + chalk.dim(" (Access 100+ models - MiniMax, DeepSeek, etc.)\n"));
-  const providerChoice = await prompt("Choose (1 or 2): ");
-  const useOpenRouter = providerChoice === "2";
+  console.log("  1. " + chalk.green.bold("OpenRouter") + chalk.green(" (Recommended)") + chalk.dim(" - Uses GLM 4.7, fastest & cheapest"));
+  console.log("  2. " + chalk.cyan("Anthropic") + chalk.dim(" (Claude models - Opus, Sonnet, Haiku)\n"));
+  console.log(chalk.dim("OpenRouter gives you access to GLM 4.7 - the best price/performance model available."));
+  console.log(chalk.dim("Get started free: ") + chalk.underline.cyan("https://openrouter.ai/keys\n"));
+  const providerChoice = await prompt("Choose (1 or 2, default 1): ");
+  const useOpenRouter = providerChoice !== "2";
   if (useOpenRouter) {
     config.setProvider("openrouter");
     console.log();
     console.log(chalk.bold("OpenRouter API Key"));
-    console.log(chalk.dim("Get yours at https://openrouter.ai/keys\n"));
+    console.log(chalk.dim("Sign up and get your key at: ") + chalk.underline.cyan("https://openrouter.ai/keys"));
+    console.log(chalk.dim("Default model: GLM 4.7 (fast, accurate, low cost)\n"));
     let openrouterKey = config.getOpenRouterApiKey();
     if (openrouterKey) {
       console.log(chalk.dim(`Current: ${openrouterKey.slice(0, 10)}...`));
@@ -657,12 +640,13 @@ async function runSetup() {
       console.log(chalk.yellow("Warning: Key doesn't look like an OpenRouter key (should start with sk-or-)"));
     }
     config.setOpenRouterApiKey(openrouterKey);
-    console.log(chalk.green("\u2713 OpenRouter API key saved\n"));
+    console.log(chalk.green("\u2713 OpenRouter API key saved"));
+    console.log(chalk.dim("  Using model: z-ai/glm-4.7\n"));
   } else {
     config.setProvider("anthropic");
     console.log();
     console.log(chalk.bold("Anthropic API Key"));
-    console.log(chalk.dim("Get yours at https://console.anthropic.com/\n"));
+    console.log(chalk.dim("Get yours at: ") + chalk.underline.cyan("https://console.anthropic.com/\n"));
     let anthropicKey = config.getAnthropicApiKey();
     if (anthropicKey) {
       console.log(chalk.dim(`Current: ${anthropicKey.slice(0, 10)}...`));
@@ -3600,35 +3584,37 @@ function extractTokenInfo(token) {
 }
 var DEFAULT_SYSTEM_PROMPT = `You are Quantish, an AI coding and trading agent.
 
-## Trading Tools (via MCP)
-- Check wallet balances and positions
-- Place, cancel, and manage orders  
-- Get market prices and orderbook data
-- Search markets on Polymarket, Kalshi, Limitless
+## MCP Architecture (3 servers)
+
+**Discovery MCP** - ALWAYS use for searching/finding markets:
+- search_markets(query) - Search across Polymarket, Kalshi, Limitless
+- get_trending_markets() - Find hot markets
+- get_market_details(platform, marketId) - Get details for any market
+- find_arbitrage() - Find arbitrage opportunities
+
+**Polymarket MCP** - Use for Polymarket trading:
+- place_order, cancel_order, get_orders
+- get_balances, get_positions
+- get_wallet_status, setup_wallet
+
+**Kalshi MCP** - Use for Kalshi trading via DFlow on Solana:
+- kalshi_buy_yes, kalshi_buy_no, kalshi_sell_position
+- kalshi_get_balances, kalshi_get_positions
+- kalshi_search_markets (backup if Discovery unavailable)
+
+## Workflow for trading:
+1. Use Discovery MCP to find markets (search_markets)
+2. From results, get the platform (polymarket/kalshi) and market ID
+3. Use the appropriate trading MCP to execute trades
 
 ## Coding Tools (local)
 - read_file, write_file, edit_file, list_dir
 - grep (search), find_files
 - run_command (blocking), start_background_process (non-blocking)
-- git operations
 
-## IMPORTANT: Background vs Blocking Commands
-
-Use \`start_background_process\` for:
-- Dev servers: npm start, npm run dev, yarn dev, vite, next dev
-- Watch mode: npm run watch, tsc --watch
-- Any server or long-running process
-- Returns immediately with a process ID
-
-Use \`run_command\` for:
-- Quick commands: ls, cat, npm install, npm run build
-- One-time operations that complete quickly
-- Blocks until command finishes
-
-After starting a background process:
-1. Use \`get_process_output(process_id)\` to check if it started correctly
-2. Use \`list_processes()\` to see all running processes
-3. Use \`stop_process(process_id)\` to stop when done
+## Background vs Blocking Commands
+Use \`start_background_process\` for dev servers, watch mode, long-running processes.
+Use \`run_command\` for quick commands that complete immediately.
 
 ## Guidelines
 - Be concise
@@ -3719,7 +3705,8 @@ var Agent = class {
     }
     const allTools = await this.getAllTools();
     const systemPrompt = this.config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
-    const model = this.config.model ?? DEFAULT_MODEL;
+    const defaultModel = this.config.provider === "openrouter" ? "z-ai/glm-4.7" : DEFAULT_MODEL;
+    const model = this.config.model ?? defaultModel;
     const maxTokens = this.config.maxTokens ?? 8192;
     this.llmProvider = createLLMProvider({
       provider: this.config.provider || "anthropic",
@@ -3901,7 +3888,7 @@ ${userMessage}`;
       return this.runWithProvider(userMessage);
     }
     const maxIterations = this.config.maxIterations ?? 15;
-    const model = this.config.model ?? "claude-sonnet-4-5-20250929";
+    const model = this.config.model ?? (this.config.provider === "openrouter" ? "z-ai/glm-4.7" : "claude-sonnet-4-5-20250929");
     const maxTokens = this.config.maxTokens ?? 8192;
     const systemPrompt = this.config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
     const useStreaming = this.config.streaming ?? true;
@@ -4151,7 +4138,7 @@ ${userMessage}`;
    * Count tokens in current conversation (uses Anthropic's token counting API)
    */
   async countTokens() {
-    const model = this.config.model ?? "claude-sonnet-4-5-20250929";
+    const model = this.config.model ?? (this.config.provider === "openrouter" ? "z-ai/glm-4.7" : "claude-sonnet-4-5-20250929");
     const systemPrompt = this.config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
     const allTools = await this.getAllTools();
     try {
@@ -4338,7 +4325,7 @@ ${chalk2.yellow("  \u2588\u2588\u2551\u2584\u2584 \u2588\u2588\u2551")}${chalk2.
 ${chalk2.yellow("  \u255A\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255D")}${chalk2.hex("#FFD700")("\u255A\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255D")}${chalk2.hex("#FFC000")("\u2588\u2588\u2551  \u2588\u2588\u2551")}${chalk2.hex("#FFB000")("\u2588\u2588\u2551 \u255A\u2588\u2588\u2588\u2588\u2551")}${chalk2.hex("#FFA000")("   \u2588\u2588\u2551   ")}${chalk2.hex("#FF9000")("\u2588\u2588\u2551")}${chalk2.hex("#FF8000")("\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551")}${chalk2.hex("#FF7000")("\u2588\u2588\u2551  \u2588\u2588\u2551")}
 ${chalk2.yellow("   \u255A\u2550\u2550\u2580\u2580\u2550\u255D ")}${chalk2.hex("#FFD700")(" \u255A\u2550\u2550\u2550\u2550\u2550\u255D ")}${chalk2.hex("#FFC000")("\u255A\u2550\u255D  \u255A\u2550\u255D")}${chalk2.hex("#FFB000")("\u255A\u2550\u255D  \u255A\u2550\u2550\u2550\u255D")}${chalk2.hex("#FFA000")("   \u255A\u2550\u255D   ")}${chalk2.hex("#FF9000")("\u255A\u2550\u255D")}${chalk2.hex("#FF8000")("\u255A\u2550\u2550\u2550\u2550\u2550\u2550\u255D")}${chalk2.hex("#FF7000")("\u255A\u2550\u255D  \u255A\u2550\u255D")}
 `;
-var TAGLINE = chalk2.dim("  AI-powered trading agent for Polymarket");
+var TAGLINE = chalk2.dim("  AI-powered trading agent for Polymarket & Kalshi");
 function printHeader() {
   console.log(BANNER);
   console.log(TAGLINE);
@@ -5452,7 +5439,7 @@ Stopped ${count} background process${count > 1 ? "es" : ""}.`);
 }
 
 // src/index.ts
-var VERSION = "0.1.29";
+var VERSION = "0.1.36";
 function cleanup() {
   if (processManager.hasRunning()) {
     const count = processManager.runningCount();

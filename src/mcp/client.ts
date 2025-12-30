@@ -72,32 +72,24 @@ export class MCPClient {
       return this.toolsCache;
     }
 
-    // Discovery MCP uses REST API format, Trading and Kalshi use JSON-RPC
+    // All MCPs now use JSON-RPC format
+    // Build headers - use only one API key header (not both)
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    
     if (this.source === 'discovery') {
-      const response = await fetch(`${this.baseUrl}/tools`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': this.apiKey,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`MCP server error: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await response.json() as { tools: MCPTool[] };
-      this.toolsCache = data.tools || [];
-      return this.toolsCache;
+      // Discovery MCP requires Accept header and uses uppercase X-API-Key
+      headers['Accept'] = 'application/json, text/event-stream';
+      headers['X-API-Key'] = this.apiKey;
+    } else {
+      // Trading and Kalshi MCPs use lowercase x-api-key
+      headers['x-api-key'] = this.apiKey;
     }
 
-    // Trading MCP uses JSON-RPC format
     const response = await fetch(this.baseUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': this.apiKey,
-      },
+      headers,
       body: JSON.stringify({
         jsonrpc: '2.0',
         method: 'tools/list',
@@ -123,53 +115,26 @@ export class MCPClient {
 
   /**
    * Call a tool on the MCP server
-   * Discovery MCP uses REST endpoints, Trading MCP uses JSON-RPC
+   * All MCPs use JSON-RPC format
    */
   async callTool(name: string, args: Record<string, unknown>): Promise<MCPToolResult> {
-    // Discovery MCP uses REST API format with /execute endpoint
+    // Build headers - use only one API key header (not both)
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    
     if (this.source === 'discovery') {
-      const response = await fetch(`${this.baseUrl}/execute`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': this.apiKey,
-        },
-        body: JSON.stringify({
-          name,
-          arguments: args,
-        }),
-      });
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error: `MCP server error: ${response.status} ${response.statusText}`,
-        };
-      }
-
-      const data = await response.json();
-      
-      // Discovery returns { success, data } or { success, error }
-      if (data.error) {
-        return {
-          success: false,
-          error: typeof data.error === 'string' ? data.error : JSON.stringify(data.error),
-        };
-      }
-
-      return {
-        success: true,
-        data: data.data ?? data.result ?? data,
-      };
+      // Discovery MCP requires Accept header and uses uppercase X-API-Key
+      headers['Accept'] = 'application/json, text/event-stream';
+      headers['X-API-Key'] = this.apiKey;
+    } else {
+      // Trading and Kalshi MCPs use lowercase x-api-key
+      headers['x-api-key'] = this.apiKey;
     }
 
-    // Trading MCP uses JSON-RPC format
     const response = await fetch(this.baseUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': this.apiKey,
-      },
+      headers,
       body: JSON.stringify({
         jsonrpc: '2.0',
         method: 'tools/call',
@@ -342,11 +307,26 @@ export class MCPClientManager {
     }
 
     // Get Trading tools (if available - Polymarket)
+    // NOTE: Discovery search tools (search_markets, get_trending_markets, etc.) should NOT be overwritten
+    // because they provide cross-platform semantic search. Trading MCP's search_markets is Polymarket-only.
+    const discoverySearchTools = new Set([
+      'search_markets',
+      'get_market_details', 
+      'get_trending_markets',
+      'get_categories',
+      'get_market_stats',
+      'get_search_status',
+      'find_arbitrage',
+    ]);
+    
     if (this.tradingClient) {
       try {
         const tradingTools = await this.tradingClient.listTools();
         for (const tool of tradingTools) {
-          // Trading tools take precedence if there's a name collision
+          // Skip if this is a Discovery search tool (Discovery's cross-platform search takes precedence)
+          if (discoverySearchTools.has(tool.name)) {
+            continue;
+          }
           allTools.push({ ...tool, source: 'trading' });
           this.toolSourceMap.set(tool.name, 'trading');
         }

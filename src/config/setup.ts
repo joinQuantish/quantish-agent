@@ -107,18 +107,21 @@ export async function runSetup(): Promise<boolean> {
   // Step 1: Choose LLM Provider
   console.log(chalk.bold('Step 1: Choose your LLM Provider'));
   console.log(chalk.dim('The AI that powers the agent.\n'));
-  console.log('  1. ' + chalk.cyan('Anthropic') + chalk.dim(' (Claude models - Opus, Sonnet, Haiku)'));
-  console.log('  2. ' + chalk.green('OpenRouter') + chalk.dim(' (Access 100+ models - MiniMax, DeepSeek, etc.)\n'));
+  console.log('  1. ' + chalk.green.bold('OpenRouter') + chalk.green(' (Recommended)') + chalk.dim(' - Uses GLM 4.7, fastest & cheapest'));
+  console.log('  2. ' + chalk.cyan('Anthropic') + chalk.dim(' (Claude models - Opus, Sonnet, Haiku)\n'));
+  console.log(chalk.dim('OpenRouter gives you access to GLM 4.7 - the best price/performance model available.'));
+  console.log(chalk.dim('Get started free: ') + chalk.underline.cyan('https://openrouter.ai/keys\n'));
   
-  const providerChoice = await prompt('Choose (1 or 2): ');
-  const useOpenRouter = providerChoice === '2';
+  const providerChoice = await prompt('Choose (1 or 2, default 1): ');
+  const useOpenRouter = providerChoice !== '2'; // Default to OpenRouter (option 1)
   
   if (useOpenRouter) {
-    // OpenRouter setup
+    // OpenRouter setup (recommended)
     config.setProvider('openrouter');
     console.log();
     console.log(chalk.bold('OpenRouter API Key'));
-    console.log(chalk.dim('Get yours at https://openrouter.ai/keys\n'));
+    console.log(chalk.dim('Sign up and get your key at: ') + chalk.underline.cyan('https://openrouter.ai/keys'));
+    console.log(chalk.dim('Default model: GLM 4.7 (fast, accurate, low cost)\n'));
     
     let openrouterKey = config.getOpenRouterApiKey();
     if (openrouterKey) {
@@ -141,13 +144,14 @@ export async function runSetup(): Promise<boolean> {
     }
 
     config.setOpenRouterApiKey(openrouterKey);
-    console.log(chalk.green('✓ OpenRouter API key saved\n'));
+    console.log(chalk.green('✓ OpenRouter API key saved'));
+    console.log(chalk.dim('  Using model: z-ai/glm-4.7\n'));
   } else {
     // Anthropic setup
     config.setProvider('anthropic');
     console.log();
     console.log(chalk.bold('Anthropic API Key'));
-    console.log(chalk.dim('Get yours at https://console.anthropic.com/\n'));
+    console.log(chalk.dim('Get yours at: ') + chalk.underline.cyan('https://console.anthropic.com/\n'));
     
     let anthropicKey = config.getAnthropicApiKey();
     if (anthropicKey) {

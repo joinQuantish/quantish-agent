@@ -344,35 +344,37 @@ export interface AgentResult {
 
 const DEFAULT_SYSTEM_PROMPT = `You are Quantish, an AI coding and trading agent.
 
-## Trading Tools (via MCP)
-- Check wallet balances and positions
-- Place, cancel, and manage orders  
-- Get market prices and orderbook data
-- Search markets on Polymarket, Kalshi, Limitless
+## MCP Architecture (3 servers)
+
+**Discovery MCP** - ALWAYS use for searching/finding markets:
+- search_markets(query) - Search across Polymarket, Kalshi, Limitless
+- get_trending_markets() - Find hot markets
+- get_market_details(platform, marketId) - Get details for any market
+- find_arbitrage() - Find arbitrage opportunities
+
+**Polymarket MCP** - Use for Polymarket trading:
+- place_order, cancel_order, get_orders
+- get_balances, get_positions
+- get_wallet_status, setup_wallet
+
+**Kalshi MCP** - Use for Kalshi trading via DFlow on Solana:
+- kalshi_buy_yes, kalshi_buy_no, kalshi_sell_position
+- kalshi_get_balances, kalshi_get_positions
+- kalshi_search_markets (backup if Discovery unavailable)
+
+## Workflow for trading:
+1. Use Discovery MCP to find markets (search_markets)
+2. From results, get the platform (polymarket/kalshi) and market ID
+3. Use the appropriate trading MCP to execute trades
 
 ## Coding Tools (local)
 - read_file, write_file, edit_file, list_dir
 - grep (search), find_files
 - run_command (blocking), start_background_process (non-blocking)
-- git operations
 
-## IMPORTANT: Background vs Blocking Commands
-
-Use \`start_background_process\` for:
-- Dev servers: npm start, npm run dev, yarn dev, vite, next dev
-- Watch mode: npm run watch, tsc --watch
-- Any server or long-running process
-- Returns immediately with a process ID
-
-Use \`run_command\` for:
-- Quick commands: ls, cat, npm install, npm run build
-- One-time operations that complete quickly
-- Blocks until command finishes
-
-After starting a background process:
-1. Use \`get_process_output(process_id)\` to check if it started correctly
-2. Use \`list_processes()\` to see all running processes
-3. Use \`stop_process(process_id)\` to stop when done
+## Background vs Blocking Commands
+Use \`start_background_process\` for dev servers, watch mode, long-running processes.
+Use \`run_command\` for quick commands that complete immediately.
 
 ## Guidelines
 - Be concise
@@ -474,7 +476,9 @@ export class Agent {
 
     const allTools = await this.getAllTools();
     const systemPrompt = this.config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
-    const model = this.config.model ?? DEFAULT_MODEL;
+    // Use provider-specific default model
+    const defaultModel = this.config.provider === 'openrouter' ? 'z-ai/glm-4.7' : DEFAULT_MODEL;
+    const model = this.config.model ?? defaultModel;
     const maxTokens = this.config.maxTokens ?? 8192;
 
     this.llmProvider = createLLMProvider({
@@ -716,7 +720,8 @@ export class Agent {
     }
     
     const maxIterations = this.config.maxIterations ?? 15;
-    const model = this.config.model ?? 'claude-sonnet-4-5-20250929';
+    // Model should be passed from ConfigManager.getModel() which handles provider-specific defaults
+    const model = this.config.model ?? (this.config.provider === 'openrouter' ? 'z-ai/glm-4.7' : 'claude-sonnet-4-5-20250929');
     const maxTokens = this.config.maxTokens ?? 8192;
     const systemPrompt = this.config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
     const useStreaming = this.config.streaming ?? true;
@@ -1058,7 +1063,7 @@ export class Agent {
    * Count tokens in current conversation (uses Anthropic's token counting API)
    */
   async countTokens(): Promise<number> {
-    const model = this.config.model ?? 'claude-sonnet-4-5-20250929';
+    const model = this.config.model ?? (this.config.provider === 'openrouter' ? 'z-ai/glm-4.7' : 'claude-sonnet-4-5-20250929');
     const systemPrompt = this.config.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
     const allTools = await this.getAllTools();
 

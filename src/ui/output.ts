@@ -18,7 +18,7 @@ ${chalk.yellow('  ╚██████╔╝')}${chalk.hex('#FFD700')('╚█�
 ${chalk.yellow('   ╚══▀▀═╝ ')}${chalk.hex('#FFD700')(' ╚═════╝ ')}${chalk.hex('#FFC000')('╚═╝  ╚═╝')}${chalk.hex('#FFB000')('╚═╝  ╚═══╝')}${chalk.hex('#FFA000')('   ╚═╝   ')}${chalk.hex('#FF9000')('╚═╝')}${chalk.hex('#FF8000')('╚══════╝')}${chalk.hex('#FF7000')('╚═╝  ╚═╝')}
 `;
 
-const TAGLINE = chalk.dim('  AI-powered trading agent for Polymarket');
+const TAGLINE = chalk.dim('  AI-powered trading agent for Polymarket & Kalshi');
 
 /**
  * Print the header with ASCII art
@@ -36,7 +36,7 @@ export function printSimpleHeader(): void {
   console.log();
   console.log(chalk.yellow.bold('┌─────────────────────────────────────┐'));
   console.log(chalk.yellow.bold('│') + '       ' + chalk.yellow.bold('QUANTISH') + '                      ' + chalk.yellow.bold('│'));
-  console.log(chalk.yellow.bold('│') + chalk.dim('  AI Trading Agent for Polymarket  ') + chalk.yellow.bold('│'));
+  console.log(chalk.yellow.bold('│') + chalk.dim(' AI Trading Agent for Polymarket & Kalshi ') + chalk.yellow.bold('│'));
   console.log(chalk.yellow.bold('└─────────────────────────────────────┘'));
   console.log();
 }
