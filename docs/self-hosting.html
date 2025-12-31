@@ -356,6 +356,17 @@ app.listen(3000);</code></pre>
 
       <p>Source code: <a href="https://github.com/joinQuantish/kalshi-mcp" target="_blank">github.com/joinQuantish/kalshi-mcp</a></p>
 
+      <div class="info-box warning">
+        <strong>⚠️ DFlow API Key Required for Self-Hosting</strong>
+        <p>DFlow access is <strong>not permissionless</strong>. To self-host a Kalshi MCP server:</p>
+        <ol>
+          <li>Contact the DFlow team directly at <a href="https://dflow.net" target="_blank">dflow.net</a></li>
+          <li>Request API access for your organization</li>
+          <li>Once approved, add <code>DFLOW_API_KEY</code> to your environment variables</li>
+        </ol>
+        <p><strong>Using Quantish's public servers?</strong> No DFlow key needed - we handle this for you. Just use the default MCP endpoints.</p>
+      </div>
+
       <h3>Kalshi Server Environment Variables</h3>
 
       <table>
@@ -380,7 +391,7 @@ app.listen(3000);</code></pre>
           </tr>
           <tr>
             <td><code>DFLOW_API_KEY</code></td>
-            <td>DFlow API key for market operations</td>
+            <td>DFlow API key (must be obtained from DFlow team - see note above)</td>
           </tr>
           <tr>
             <td><code>SOLANA_RPC_URL</code></td>
