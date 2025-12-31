@@ -9,6 +9,7 @@
 </head>
 <body>
   <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+  <div class="sidebar-overlay" onclick="closeSidebar()"></div>
   
   <div class="layout">
     <!-- Sidebar Navigation -->
@@ -27,10 +28,20 @@
         <li><a href="self-hosting.html"><span class="nav-prefix">└</span> Self-Hosting</a></li>
       </ul>
       
+      <div class="nav-section">V1 (OpenRouter)</div>
+      <ul class="nav-tree">
+        <li><a href="https://github.com/joinQuantish/quantish-agent" target="_blank"><span class="nav-prefix">○</span> GitHub V1</a></li>
+        <li><a href="https://www.npmjs.com/package/@quantish/agent" target="_blank"><span class="nav-prefix">○</span> NPM V1</a></li>
+      </ul>
+      
+      <div class="nav-section">V2 (Gemini)</div>
+      <ul class="nav-tree">
+        <li><a href="https://github.com/joinQuantish/quantish-agent-v2" target="_blank"><span class="nav-prefix">○</span> GitHub V2</a></li>
+        <li><a href="https://www.npmjs.com/package/@quantish/agent-v2" target="_blank"><span class="nav-prefix">○</span> NPM V2</a></li>
+      </ul>
+      
       <div class="nav-section">Resources</div>
       <ul class="nav-tree">
-        <li><a href="https://github.com/joinQuantish/quantish-agent" target="_blank"><span class="nav-prefix">○</span> GitHub</a></li>
-        <li><a href="https://www.npmjs.com/package/@quantish/agent" target="_blank"><span class="nav-prefix">○</span> NPM</a></li>
         <li><a href="https://quantish.live" target="_blank"><span class="nav-prefix">○</span> quantish.live</a></li>
       </ul>
     </nav>
@@ -48,7 +59,14 @@
 
       <h1>Quantish Agent</h1>
       
-      <p>AI-powered agent for trading on <strong>Polymarket</strong> and <strong>Kalshi</strong>. Combines <strong>coding tools</strong> (filesystem, shell, git) with <strong>trading tools</strong> (orders, positions, balances) powered by Claude AI.</p>
+      <p>AI-powered agent for trading on <strong>Polymarket</strong> and <strong>Kalshi</strong>. Combines <strong>coding tools</strong> (filesystem, shell, git) with <strong>trading tools</strong> (orders, positions, balances).</p>
+
+      <div class="callout warning">
+        <div class="callout-title">🆕 Two Versions Available</div>
+        <p><strong>V1</strong> (<code>quantish</code>) - OpenRouter/Anthropic powered, built from scratch. Best for custom bots.<br>
+        <strong>V2</strong> (<code>quantish2</code>) - Gemini powered, native MCP integration. Best for app building.</p>
+        <p><a href="#v1-vs-v2">See comparison below →</a></p>
+      </div>
 
       <!-- Quick Install -->
       <div class="terminal">
@@ -58,28 +76,33 @@
           <span class="terminal-dot green"></span>
         </div>
         <div class="terminal-body">
+          <div class="terminal-line terminal-output"># Install V1 (OpenRouter/Anthropic)</div>
           <div class="terminal-line">
             <span class="terminal-prompt">$</span>
             <span class="terminal-command"> npm install -g @quantish/agent</span>
           </div>
           <div class="terminal-line">
             <span class="terminal-prompt">$</span>
-            <span class="terminal-command"> quantish init</span>
+            <span class="terminal-command"> quantish init && quantish</span>
           </div>
-          <div class="terminal-line terminal-output">✓ Anthropic API key configured</div>
-          <div class="terminal-line terminal-output">✓ Quantish wallet created</div>
-          <div class="terminal-line terminal-success">Ready to trade!</div>
+          <div class="terminal-line terminal-output">&nbsp;</div>
+          <div class="terminal-line terminal-output"># Install V2 (Gemini-powered)</div>
           <div class="terminal-line">
             <span class="terminal-prompt">$</span>
-            <span class="terminal-command"> quantish</span>
+            <span class="terminal-command"> npm install -g @quantish/agent-v2</span>
+          </div>
+          <div class="terminal-line">
+            <span class="terminal-prompt">$</span>
+            <span class="terminal-command"> quantish2</span>
           </div>
         </div>
       </div>
 
-      <p style="margin-top: 24px;">
+      <div style="margin-top: 24px; display: flex; flex-wrap: wrap; gap: 12px;">
         <a href="getting-started.html" class="btn">Get Started</a>
-        <a href="https://github.com/joinQuantish/quantish-agent" class="btn btn-outline" style="margin-left: 12px;">View on GitHub</a>
-      </p>
+        <a href="https://github.com/joinQuantish/quantish-agent" class="btn btn-outline" target="_blank">GitHub V1</a>
+        <a href="https://github.com/joinQuantish/quantish-agent-v2" class="btn btn-outline" target="_blank">GitHub V2</a>
+      </div>
 
       <h2>Features</h2>
 
@@ -156,6 +179,60 @@
           <div class="terminal-line terminal-output">✓ place_order(side: "BUY", price: 0.02, size: 500)</div>
           <div class="terminal-line terminal-success">Order placed! 500 shares at $0.02</div>
         </div>
+      </div>
+
+      <h2 id="v1-vs-v2">V1 vs V2 - Which Should I Use?</h2>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>V1 (<code>@quantish/agent</code>)</th>
+            <th>V2 (<code>@quantish/agent-v2</code>)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>CLI Command</strong></td>
+            <td><code>quantish</code></td>
+            <td><code>quantish2</code></td>
+          </tr>
+          <tr>
+            <td><strong>Backend</strong></td>
+            <td>OpenRouter / Anthropic</td>
+            <td>Google Gemini</td>
+          </tr>
+          <tr>
+            <td><strong>Auth</strong></td>
+            <td>API Key only</td>
+            <td>Google OAuth / API Key / Vertex AI</td>
+          </tr>
+          <tr>
+            <td><strong>File Tools</strong></td>
+            <td>Basic read/write</td>
+            <td>Full sandbox with file operations</td>
+          </tr>
+          <tr>
+            <td><strong>MCP Integration</strong></td>
+            <td>Custom HTTP clients</td>
+            <td>Native MCP protocol</td>
+          </tr>
+          <tr>
+            <td><strong>Best For</strong></td>
+            <td>Custom bots, full control</td>
+            <td>General trading, app building</td>
+          </tr>
+          <tr>
+            <td><strong>GitHub</strong></td>
+            <td><a href="https://github.com/joinQuantish/quantish-agent">quantish-agent</a></td>
+            <td><a href="https://github.com/joinQuantish/quantish-agent-v2">quantish-agent-v2</a></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout info">
+        <div class="callout-title">Install Both Side-by-Side</div>
+        <p>Both versions can be installed simultaneously. V1 uses <code>quantish</code> and V2 uses <code>quantish2</code>.</p>
       </div>
 
       <h2>Platform Support</h2>

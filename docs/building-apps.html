@@ -8,6 +8,7 @@
 </head>
 <body>
   <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+  <div class="sidebar-overlay" onclick="closeSidebar()"></div>
   
   <div class="layout">
     <nav class="sidebar" id="sidebar">
@@ -25,10 +26,20 @@
         <li><a href="self-hosting.html"><span class="nav-prefix">└</span> Self-Hosting</a></li>
       </ul>
       
+      <div class="nav-section">V1 (OpenRouter)</div>
+      <ul class="nav-tree">
+        <li><a href="https://github.com/joinQuantish/quantish-agent" target="_blank"><span class="nav-prefix">○</span> GitHub V1</a></li>
+        <li><a href="https://www.npmjs.com/package/@quantish/agent" target="_blank"><span class="nav-prefix">○</span> NPM V1</a></li>
+      </ul>
+      
+      <div class="nav-section">V2 (Gemini)</div>
+      <ul class="nav-tree">
+        <li><a href="https://github.com/joinQuantish/quantish-agent-v2" target="_blank"><span class="nav-prefix">○</span> GitHub V2</a></li>
+        <li><a href="https://www.npmjs.com/package/@quantish/agent-v2" target="_blank"><span class="nav-prefix">○</span> NPM V2</a></li>
+      </ul>
+      
       <div class="nav-section">Resources</div>
       <ul class="nav-tree">
-        <li><a href="https://github.com/joinQuantish/quantish-agent" target="_blank"><span class="nav-prefix">○</span> GitHub</a></li>
-        <li><a href="https://www.npmjs.com/package/@quantish/agent" target="_blank"><span class="nav-prefix">○</span> NPM</a></li>
         <li><a href="https://quantish.live" target="_blank"><span class="nav-prefix">○</span> quantish.live</a></li>
       </ul>
     </nav>

@@ -8,6 +8,7 @@
 </head>
 <body>
   <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+  <div class="sidebar-overlay" onclick="closeSidebar()"></div>
   
   <div class="layout">
     <nav class="sidebar" id="sidebar">
@@ -25,12 +26,26 @@
         <li><a href="self-hosting.html" class="active"><span class="nav-prefix">└</span> Self-Hosting</a></li>
       </ul>
       
-      <div class="nav-section">Resources</div>
+      <div class="nav-section">V1 (OpenRouter)</div>
       <ul class="nav-tree">
-        <li><a href="https://github.com/joinQuantish/quantish-agent" target="_blank"><span class="nav-prefix">○</span> Agent GitHub</a></li>
+        <li><a href="https://github.com/joinQuantish/quantish-agent" target="_blank"><span class="nav-prefix">○</span> GitHub V1</a></li>
+        <li><a href="https://www.npmjs.com/package/@quantish/agent" target="_blank"><span class="nav-prefix">○</span> NPM V1</a></li>
+      </ul>
+      
+      <div class="nav-section">V2 (Gemini)</div>
+      <ul class="nav-tree">
+        <li><a href="https://github.com/joinQuantish/quantish-agent-v2" target="_blank"><span class="nav-prefix">○</span> GitHub V2</a></li>
+        <li><a href="https://www.npmjs.com/package/@quantish/agent-v2" target="_blank"><span class="nav-prefix">○</span> NPM V2</a></li>
+      </ul>
+      
+      <div class="nav-section">MCP Servers</div>
+      <ul class="nav-tree">
         <li><a href="https://github.com/joinQuantish/quantish-server" target="_blank"><span class="nav-prefix">○</span> Polymarket Server</a></li>
         <li><a href="https://github.com/joinQuantish/kalshi-mcp" target="_blank"><span class="nav-prefix">○</span> Kalshi Server</a></li>
-        <li><a href="https://www.npmjs.com/package/@quantish/agent" target="_blank"><span class="nav-prefix">○</span> NPM</a></li>
+      </ul>
+      
+      <div class="nav-section">Resources</div>
+      <ul class="nav-tree">
         <li><a href="https://quantish.live" target="_blank"><span class="nav-prefix">○</span> quantish.live</a></li>
       </ul>
     </nav>
@@ -390,6 +405,41 @@ app.listen(3000);</code></pre>
           <div class="terminal-line terminal-output">a1b2c3d4e5f6... (64 characters)</div>
         </div>
       </div>
+
+      <h3>Kalshi MCP Tools</h3>
+
+      <p>The Kalshi MCP server includes full wallet management capabilities:</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Tools</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Trading</strong></td>
+            <td><code>kalshi_buy_yes</code>, <code>kalshi_buy_no</code>, <code>kalshi_sell_position</code></td>
+          </tr>
+          <tr>
+            <td><strong>Swaps (Jupiter)</strong></td>
+            <td><code>kalshi_swap_sol_to_usdc</code>, <code>kalshi_swap_usdc_to_sol</code>, <code>kalshi_execute_swap</code></td>
+          </tr>
+          <tr>
+            <td><strong>Withdrawals</strong></td>
+            <td><code>kalshi_send_sol</code>, <code>kalshi_send_usdc</code>, <code>kalshi_send_token</code></td>
+          </tr>
+          <tr>
+            <td><strong>Redemption</strong></td>
+            <td><code>kalshi_redeem_winnings</code>, <code>kalshi_get_redeemable_positions</code>, <code>kalshi_redeem_all_positions</code></td>
+          </tr>
+          <tr>
+            <td><strong>Wallet</strong></td>
+            <td><code>kalshi_get_balances</code>, <code>kalshi_get_token_holdings</code>, <code>kalshi_get_deposit_address</code></td>
+          </tr>
+        </tbody>
+      </table>
 
       <h2>Architecture Overview</h2>
 

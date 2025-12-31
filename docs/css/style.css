@@ -456,6 +456,8 @@ tr:hover td {
     transform: translateX(-100%);
     z-index: 100;
     transition: transform 0.3s ease;
+    width: 85%;
+    max-width: 320px;
   }
 
   .sidebar.open {
@@ -464,27 +466,128 @@ tr:hover td {
 
   .main {
     margin-left: 0;
-    padding: 24px;
+    padding: 20px 16px;
   }
 
   .mobile-menu-btn {
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     position: fixed;
-    top: 16px;
-    left: 16px;
+    top: 12px;
+    left: 12px;
     z-index: 99;
     background: var(--yellow);
     color: var(--bg-primary);
     border: none;
-    padding: 8px 12px;
-    border-radius: 4px;
+    padding: 10px 14px;
+    border-radius: 6px;
     cursor: pointer;
+    font-size: 18px;
+    font-weight: bold;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-menu-btn:active {
+    background: var(--yellow-dim);
+    transform: scale(0.95);
+  }
+
+  /* Touch-friendly nav links */
+  .nav-tree a {
+    padding: 14px 24px;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+  }
+
+  /* Overlay when sidebar open */
+  .sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 99;
+  }
+
+  .sidebar.open + .sidebar-overlay,
+  body.sidebar-open .sidebar-overlay {
+    display: block;
+  }
+
+  /* Hide ASCII art on very small screens */
+  .ascii-header {
+    font-size: 6px;
+    overflow-x: auto;
+    margin-bottom: 16px;
+  }
+
+  /* Responsive tables */
+  table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    font-size: 12px;
+  }
+
+  th, td {
+    padding: 8px 12px;
+    white-space: nowrap;
+  }
+
+  /* Stack feature grid on mobile */
+  .feature-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  /* Stack buttons on mobile */
+  .btn {
+    padding: 14px 20px;
+    font-size: 13px;
+  }
+
+  h1 {
+    font-size: 22px;
+    padding-top: 48px; /* Space for hamburger menu */
+  }
+
+  h2 {
+    font-size: 18px;
+    margin-top: 32px;
+  }
+
+  /* Terminal adjustments */
+  .terminal-body {
+    padding: 12px;
+    font-size: 11px;
+    line-height: 1.6;
+  }
+}
+
+@media (max-width: 480px) {
+  .ascii-header {
+    display: none; /* Hide on very small phones */
+  }
+
+  h1 {
+    font-size: 20px;
+  }
+
+  .callout {
+    padding: 12px;
+    font-size: 13px;
   }
 }
 
 @media (min-width: 901px) {
   .mobile-menu-btn {
     display: none;
+  }
+
+  .sidebar-overlay {
+    display: none !important;
   }
 }
 
