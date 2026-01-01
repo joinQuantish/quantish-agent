@@ -323,7 +323,11 @@ X-API-Key: &lt;user-api-key&gt;</code></pre>
         <div class="terminal-body">
           <div class="terminal-line">
             <span class="terminal-prompt">$</span>
-            <span class="terminal-command"> npm install @quantish/kalshi-server</span>
+            <span class="terminal-command"> git clone https://github.com/joinQuantish/kalshi-mcp</span>
+          </div>
+          <div class="terminal-line">
+            <span class="terminal-prompt">$</span>
+            <span class="terminal-command"> cd kalshi-mcp && npm install</span>
           </div>
         </div>
       </div>
@@ -388,6 +392,31 @@ X-API-Key: &lt;user-api-key&gt;</code></pre>
             <span class="terminal-command"> node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"</span>
           </div>
           <div class="terminal-line terminal-output">a1b2c3d4e5f6... (64 characters)</div>
+        </div>
+      </div>
+
+      <h3>Setup and Run</h3>
+
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line">
+            <span class="terminal-prompt">$</span>
+            <span class="terminal-command"> npm run db:generate</span>
+          </div>
+          <div class="terminal-line">
+            <span class="terminal-prompt">$</span>
+            <span class="terminal-command"> npm run db:push</span>
+          </div>
+          <div class="terminal-line">
+            <span class="terminal-prompt">$</span>
+            <span class="terminal-command"> npm start</span>
+          </div>
+          <div class="terminal-line terminal-output">Kalshi MCP server running on http://localhost:3000</div>
         </div>
       </div>
 
