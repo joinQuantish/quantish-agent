@@ -40,7 +40,7 @@
       
       <div class="nav-section">MCP Servers</div>
       <ul class="nav-tree">
-        <li><a href="https://github.com/joinQuantish/quantish-server" target="_blank"><span class="nav-prefix">○</span> Polymarket Server</a></li>
+        <li><a href="https://github.com/joinQuantish/polymarket-mcp" target="_blank"><span class="nav-prefix">○</span> Polymarket Server</a></li>
         <li><a href="https://github.com/joinQuantish/kalshi-mcp" target="_blank"><span class="nav-prefix">○</span> Kalshi Server</a></li>
       </ul>
       
@@ -162,43 +162,9 @@ X-API-Key: &lt;user-api-key&gt;</code></pre>
         </tbody>
       </table>
 
-      <h2>Using @quantish/server</h2>
+      <h2>Polymarket Server (@quantish/polymarket-server)</h2>
 
-      <p>We provide an official self-hosting package on NPM:</p>
-
-      <div class="terminal">
-        <div class="terminal-header">
-          <span class="terminal-dot red"></span>
-          <span class="terminal-dot yellow"></span>
-          <span class="terminal-dot green"></span>
-        </div>
-        <div class="terminal-body">
-          <div class="terminal-line">
-            <span class="terminal-prompt">$</span>
-            <span class="terminal-command"> npm install @quantish/server</span>
-          </div>
-        </div>
-      </div>
-
-      <p>Source code: <a href="https://github.com/joinQuantish/quantish-server" target="_blank">github.com/joinQuantish/quantish-server</a></p>
-
-      <h3>Quick Start</h3>
-
-      <pre><code>import { createServer, PostgresAdapter } from '@quantish/server';
-
-const server = await createServer({
-  database: new PostgresAdapter({
-    connectionString: process.env.DATABASE_URL
-  }),
-  encryption: {
-    masterKey: process.env.QUANTISH_MASTER_KEY
-  }
-});
-
-server.listen(3000);
-console.log('Quantish server running on http://localhost:3000');</code></pre>
-
-      <h3>Generate Master Key</h3>
+      <p>Self-host a Polymarket MCP server for trading on Polymarket via Polygon:</p>
 
       <div class="terminal">
         <div class="terminal-header">
@@ -209,84 +175,92 @@ console.log('Quantish server running on http://localhost:3000');</code></pre>
         <div class="terminal-body">
           <div class="terminal-line">
             <span class="terminal-prompt">$</span>
-            <span class="terminal-command"> npx quantish generate-key</span>
+            <span class="terminal-command"> git clone https://github.com/joinQuantish/polymarket-mcp</span>
           </div>
-          <div class="terminal-line terminal-output">🔐 Generated master key (save this securely!):</div>
-          <div class="terminal-line terminal-output">a1b2c3d4e5f6...</div>
+          <div class="terminal-line">
+            <span class="terminal-prompt">$</span>
+            <span class="terminal-command"> cd polymarket-mcp && npm install</span>
+          </div>
         </div>
       </div>
 
-      <h3>Packages Included</h3>
+      <p>Source code: <a href="https://github.com/joinQuantish/polymarket-mcp" target="_blank">github.com/joinQuantish/polymarket-mcp</a></p>
+
+      <h3>Polymarket Server Environment Variables</h3>
 
       <table>
         <thead>
           <tr>
-            <th>Package</th>
+            <th>Variable</th>
             <th>Description</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td><code>@quantish/server</code></td>
-            <td>Express server with trading endpoints</td>
+            <td><code>DATABASE_URL</code></td>
+            <td>PostgreSQL connection string</td>
           </tr>
           <tr>
-            <td><code>@quantish/core</code></td>
-            <td>Encryption, signing, wallet utilities</td>
+            <td><code>ENCRYPTION_KEY</code></td>
+            <td>64-character hex string for wallet encryption</td>
           </tr>
           <tr>
-            <td><code>@quantish/types</code></td>
-            <td>TypeScript type definitions</td>
+            <td><code>ENCRYPTION_IV</code></td>
+            <td>32-character hex string for encryption IV</td>
+          </tr>
+          <tr>
+            <td><code>POLYGON_RPC_URL</code></td>
+            <td>Polygon RPC endpoint (e.g., Alchemy, Infura)</td>
           </tr>
         </tbody>
       </table>
 
-      <h3>Manual Implementation</h3>
+      <h3>Generate Encryption Keys</h3>
 
-      <p>If you prefer to build from scratch, your server must implement a JSON-RPC 2.0 compatible endpoint:</p>
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line">
+            <span class="terminal-prompt">$</span>
+            <span class="terminal-command"> node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"</span>
+          </div>
+          <div class="terminal-line terminal-output"># Use output for ENCRYPTION_KEY</div>
+          <div class="terminal-line">
+            <span class="terminal-prompt">$</span>
+            <span class="terminal-command"> node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"</span>
+          </div>
+          <div class="terminal-line terminal-output"># Use output for ENCRYPTION_IV</div>
+        </div>
+      </div>
 
-      <pre><code>// server.js - Minimal Trading MCP Server
-import express from 'express';
+      <h3>Setup and Run</h3>
 
-const app = express();
-app.use(express.json());
-
-app.post('/mcp/execute', async (req, res) => {
-  const { method, params, id } = req.body;
-  const apiKey = req.headers['x-api-key'];
-  
-  // Validate API key
-  if (!validateApiKey(apiKey)) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-  
-  try {
-    let result;
-    switch (params.name) {
-      case 'get_balances':
-        result = await getBalances(apiKey);
-        break;
-      case 'place_order':
-        result = await placeOrder(apiKey, params.arguments);
-        break;
-      // ... implement other tools
-    }
-    
-    res.json({
-      jsonrpc: '2.0',
-      result: { content: [{ type: 'text', text: JSON.stringify(result) }] },
-      id
-    });
-  } catch (error) {
-    res.json({
-      jsonrpc: '2.0',
-      error: { code: -32000, message: error.message },
-      id
-    });
-  }
-});
-
-app.listen(3000);</code></pre>
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-line">
+            <span class="terminal-prompt">$</span>
+            <span class="terminal-command"> npm run db:generate</span>
+          </div>
+          <div class="terminal-line">
+            <span class="terminal-prompt">$</span>
+            <span class="terminal-command"> npm run db:push</span>
+          </div>
+          <div class="terminal-line">
+            <span class="terminal-prompt">$</span>
+            <span class="terminal-command"> npm start</span>
+          </div>
+          <div class="terminal-line terminal-output">Polymarket MCP server running on http://localhost:3000</div>
+        </div>
+      </div>
 
       <h2>Required Environment Variables</h2>
 
