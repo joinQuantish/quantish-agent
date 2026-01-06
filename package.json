@@ -1,6 +1,6 @@
 {
   "name": "@quantish/agent",
-  "version": "0.1.65",
+  "version": "0.1.67",
   "description": "AI-powered agent for trading on Polymarket and Kalshi",
   "type": "module",
   "bin": {
@@ -53,6 +53,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.0",
+    "@quantish/agent": "^0.1.67",
     "chalk": "^5.3.0",
     "commander": "^12.1.0",
     "conf": "^13.0.1",

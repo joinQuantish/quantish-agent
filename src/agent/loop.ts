@@ -72,15 +72,19 @@ function truncateToolResult(result: unknown, toolName: string): unknown {
   if (toolName === 'search_markets' && result && typeof result === 'object') {
     const marketResult = result as { markets?: unknown[]; found?: number; [key: string]: unknown };
     if (Array.isArray(marketResult.markets)) {
-      // Keep top 5 markets with essential fields only
+      // Keep top 5 markets with essential fields including tokens (which contain prices)
       const trimmedMarkets = marketResult.markets.slice(0, 5).map((m: any) => ({
         platform: m.platform,
         title: m.title,
         question: m.question,
         conditionId: m.conditionId,
+        slug: m.slug,
+        tokens: m.tokens, // Contains outcome prices!
         bestBid: m.bestBid,
         bestAsk: m.bestAsk,
         outcomePrices: m.outcomePrices,
+        volume: m.volume,
+        liquidity: m.liquidity,
       }));
       return {
         ...marketResult,
@@ -550,12 +554,11 @@ export class Agent {
           source,
         });
 
-        // Truncate large results to prevent context overflow
-        const truncatedResult = truncateToolResult(result, toolCall.name);
+        // Pass full results to agent (no truncation)
         toolResults.push({
           type: 'tool_result',
           tool_use_id: toolCall.id,
-          content: JSON.stringify(truncatedResult),
+          content: JSON.stringify(result),
         });
       }
 
@@ -945,12 +948,11 @@ export class Agent {
           source,
         });
 
-        // Truncate large results to prevent context overflow
-        const truncatedResult = truncateToolResult(result, toolUse.name);
+        // Pass full results to agent (no truncation)
         toolResults.push({
           type: 'tool_result',
           tool_use_id: toolUse.id,
-          content: JSON.stringify(truncatedResult),
+          content: JSON.stringify(result),
         });
       }
 

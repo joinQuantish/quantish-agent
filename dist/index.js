@@ -10,7 +10,7 @@ import {
   listOpenRouterModels,
   localTools,
   processManager
-} from "./chunk-LQQUSD7H.js";
+} from "./chunk-LQCQDNUW.js";
 
 // src/index.ts
 import React2 from "react";

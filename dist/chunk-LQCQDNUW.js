@@ -2643,7 +2643,7 @@ ${config.prompt}
 - Focus on answering the task, not explaining your process`;
 }
 async function runSubAgent(task, config) {
-  const { Agent: Agent2 } = await import("./loop-KIBFY4JJ.js");
+  const { Agent: Agent2 } = await import("./loop-4H2BQDW3.js");
   const thoroughnessConfig = THOROUGHNESS_CONFIG[task.thoroughness || "medium"];
   const allowedTools = filterToolsForSubAgent(config.allTools, task.allowedToolPatterns);
   const isOpenRouter = config.provider === "openrouter";
@@ -3795,40 +3795,6 @@ function createLLMProvider(config) {
 }
 
 // src/agent/loop.ts
-var MAX_RESULT_CHARS = 3e4;
-function truncateToolResult(result, toolName) {
-  const stringified = JSON.stringify(result);
-  if (stringified.length <= MAX_RESULT_CHARS) {
-    return result;
-  }
-  if (toolName === "search_markets" && result && typeof result === "object") {
-    const marketResult = result;
-    if (Array.isArray(marketResult.markets)) {
-      const trimmedMarkets = marketResult.markets.slice(0, 5).map((m) => ({
-        platform: m.platform,
-        title: m.title,
-        question: m.question,
-        conditionId: m.conditionId,
-        bestBid: m.bestBid,
-        bestAsk: m.bestAsk,
-        outcomePrices: m.outcomePrices
-      }));
-      return {
-        ...marketResult,
-        markets: trimmedMarkets,
-        _truncated: true,
-        _originalCount: marketResult.markets.length,
-        _note: `Showing top 5 of ${marketResult.markets.length} results. Use more specific search if needed.`
-      };
-    }
-  }
-  const truncated = stringified.slice(0, MAX_RESULT_CHARS);
-  return {
-    _truncated: true,
-    _originalLength: stringified.length,
-    data: truncated + "... [truncated]"
-  };
-}
 var DEFAULT_SYSTEM_PROMPT = `You are Quantish, an AI trading agent for prediction markets (Polymarket, Kalshi).
 
 ## \u26A0\uFE0F MANDATORY FIRST STEP - READ THIS
@@ -4126,11 +4092,10 @@ var Agent = class _Agent {
           result,
           source
         });
-        const truncatedResult = truncateToolResult(result, toolCall.name);
         toolResults.push({
           type: "tool_result",
           tool_use_id: toolCall.id,
-          content: JSON.stringify(truncatedResult)
+          content: JSON.stringify(result)
         });
       }
       currentTurnMessages.push({
@@ -4401,11 +4366,10 @@ var Agent = class _Agent {
           result,
           source
         });
-        const truncatedResult = truncateToolResult(result, toolUse.name);
         toolResults.push({
           type: "tool_result",
           tool_use_id: toolUse.id,
-          content: JSON.stringify(truncatedResult)
+          content: JSON.stringify(result)
         });
       }
       currentTurnMessages.push({
