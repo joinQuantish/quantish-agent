@@ -145,7 +145,7 @@ export async function runSetup(): Promise<boolean> {
 
     config.setOpenRouterApiKey(openrouterKey);
     console.log(chalk.green('✓ OpenRouter API key saved'));
-    console.log(chalk.dim('  Using model: z-ai/glm-4.7\n'));
+    console.log(chalk.dim('  Using model: Claude Haiku 4.5\n'));
   } else {
     // Anthropic setup
     config.setProvider('anthropic');

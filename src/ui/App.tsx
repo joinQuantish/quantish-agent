@@ -22,6 +22,20 @@ function getTokenColor(count: number): string {
   return 'red';
 }
 
+// Get context efficiency indicator
+function getContextIndicator(prevTokens: number, currentTokens: number): { text: string; color: string } | null {
+  if (prevTokens === 0 || currentTokens === 0) return null;
+
+  // If tokens dropped significantly, slim context is working
+  const reduction = prevTokens - currentTokens;
+  const reductionPercent = (reduction / prevTokens) * 100;
+
+  if (reductionPercent > 50) {
+    return { text: '↓slim', color: 'green' };
+  }
+  return null;
+}
+
 interface ToolCallDisplay {
   name: string;
   args: Record<string, unknown>;
@@ -126,6 +140,11 @@ export function App({ agent, onExit }: AppProps) {
     cost: { inputCost: 0, outputCost: 0, cacheWriteCost: 0, cacheReadCost: 0, totalCost: 0 },
     sessionCost: 0,
   });
+
+  // Track previous token count to detect slim context
+  const [prevInputTokens, setPrevInputTokens] = useState(0);
+  const [contextStatus, setContextStatus] = useState<string | null>(null);
+  const [turnCount, setTurnCount] = useState(0);
   
   // Track completed tool calls for final message
   const completedToolCalls = useRef<ToolCall[]>([]);
@@ -829,7 +848,25 @@ Last API Call Cost:
         // Stream ended for this turn
       },
       onTokenUsage: (usage: TokenUsage) => {
-        setTokenUsage(usage);
+        // Detect slim context activation
+        setTokenUsage(prev => {
+          if (prev.inputTokens > 0 && usage.inputTokens < prev.inputTokens * 0.5) {
+            // Significant reduction = slim context working
+            setContextStatus(`↓${formatTokenCount(prev.inputTokens - usage.inputTokens)} saved`);
+            setTimeout(() => setContextStatus(null), 5000); // Clear after 5s
+          } else if (usage.inputTokens > prev.inputTokens * 1.5 && prev.inputTokens > 10000) {
+            // Large increase = tool results in current turn
+            setContextStatus('tool results (ephemeral)');
+            setTimeout(() => setContextStatus(null), 8000);
+          }
+          setPrevInputTokens(prev.inputTokens);
+          return usage;
+        });
+      },
+      onCompression: (toolName: string, originalSize: number, compressedSize: number) => {
+        const savedPercent = Math.round((1 - compressedSize / originalSize) * 100);
+        setContextStatus(`${toolName}: compressed ${savedPercent}%`);
+        setTimeout(() => setContextStatus(null), 5000);
       },
     };
 
@@ -1092,8 +1129,9 @@ Last API Call Cost:
           {tokenUsage.totalTokens > 0 && (
             <Text color={getTokenColor(tokenUsage.inputTokens)}>
               {tokenUsage.sessionCost > 0 ? ' • ' : ''}
-              ~{formatTokenCount(tokenUsage.inputTokens)} tokens
-              {tokenUsage.inputTokens >= 80000 && ' (/compact)'}
+              ~{formatTokenCount(tokenUsage.inputTokens)} ctx
+              {contextStatus && <Text color="cyan"> ({contextStatus})</Text>}
+              {!contextStatus && tokenUsage.inputTokens >= 80000 && ' (/compact)'}
             </Text>
           )}
           <Text color="gray" dimColor>

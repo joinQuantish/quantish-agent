@@ -201,6 +201,23 @@ export const OPENROUTER_MODELS: Record<string, OpenRouterModelConfig> = {
     supportsReasoning: true,
     description: 'Anthropic Opus 4.5 via OpenRouter.',
   },
+  'anthropic/claude-sonnet-4.5': {
+    id: 'anthropic/claude-sonnet-4.5',
+    name: 'claude-sonnet-4.5-or',
+    displayName: 'Claude Sonnet 4.5 (OR)',
+    provider: 'Anthropic',
+    pricing: {
+      inputPerMTok: 3.00,
+      outputPerMTok: 15.00,
+      cacheReadPerMTok: 0.30,
+      cacheWritePerMTok: 3.75,
+    },
+    contextWindow: 200000,
+    maxOutputTokens: 64000,
+    supportsTools: true,
+    supportsReasoning: true,
+    description: 'Anthropic Sonnet 4.5 via OpenRouter. Balanced performance and cost.',
+  },
   'anthropic/claude-haiku-4.5': {
     id: 'anthropic/claude-haiku-4.5',
     name: 'claude-haiku-4.5-or',
@@ -280,8 +297,16 @@ export const OPENROUTER_ALIASES: Record<string, string> = {
   'grok': 'x-ai/grok-4.1-fast',
   
   // Anthropic via OR
+  'sonnet': 'anthropic/claude-sonnet-4.5',
+  'sonnet-4.5': 'anthropic/claude-sonnet-4.5',
+  'sonnet 4.5': 'anthropic/claude-sonnet-4.5',
+  'claude-sonnet-4.5': 'anthropic/claude-sonnet-4.5',
+  'claude-sonnet-4-5-20250929': 'anthropic/claude-sonnet-4.5',
+  'sonnet-or': 'anthropic/claude-sonnet-4.5',
   'opus-or': 'anthropic/claude-opus-4.5',
   'haiku-or': 'anthropic/claude-haiku-4.5',
+  'haiku': 'anthropic/claude-haiku-4.5',
+  'haiku-4.5': 'anthropic/claude-haiku-4.5',
   
   // Free
   'free': 'mistralai/devstral-2512:free',

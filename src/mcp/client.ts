@@ -15,6 +15,19 @@ export interface MCPTool {
   };
 }
 
+export interface MCPResource {
+  uri: string;
+  name: string;
+  description?: string;
+  mimeType?: string;
+}
+
+export interface MCPResourceContent {
+  uri: string;
+  mimeType?: string;
+  text?: string;
+}
+
 export interface MCPToolResult {
   success: boolean;
   data?: unknown;
@@ -192,6 +205,94 @@ export class MCPClient {
    */
   clearCache(): void {
     this.toolsCache = null;
+    this.resourcesCache = null;
+  }
+
+  private resourcesCache: MCPResource[] | null = null;
+
+  /**
+   * List available resources from the MCP server
+   */
+  async listResources(): Promise<MCPResource[]> {
+    if (this.resourcesCache) {
+      return this.resourcesCache;
+    }
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (this.source === 'discovery') {
+      headers['Accept'] = 'application/json, text/event-stream';
+      headers['X-API-Key'] = this.apiKey;
+    } else {
+      headers['x-api-key'] = this.apiKey;
+    }
+
+    const response = await fetch(this.baseUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'resources/list',
+        params: {},
+        id: Date.now(),
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`MCP server error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json() as JSONRPCResponse;
+
+    if (data.error) {
+      throw new Error(`MCP error: ${data.error.message}`);
+    }
+
+    const resources = (data.result as { resources?: MCPResource[] })?.resources || [];
+    this.resourcesCache = resources;
+    return resources;
+  }
+
+  /**
+   * Read a resource from the MCP server
+   */
+  async readResource(uri: string): Promise<MCPResourceContent | null> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (this.source === 'discovery') {
+      headers['Accept'] = 'application/json, text/event-stream';
+      headers['X-API-Key'] = this.apiKey;
+    } else {
+      headers['x-api-key'] = this.apiKey;
+    }
+
+    const response = await fetch(this.baseUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'resources/read',
+        params: { uri },
+        id: Date.now(),
+      }),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json() as JSONRPCResponse;
+
+    if (data.error) {
+      return null;
+    }
+
+    const contents = (data.result as { contents?: MCPResourceContent[] })?.contents;
+    return contents && contents.length > 0 ? contents[0] : null;
   }
 
   /**
@@ -361,12 +462,16 @@ export class MCPClientManager {
 
   /**
    * Call a tool on the appropriate server
+   * Applies smart defaults for context efficiency (e.g., pagination limits)
    */
   async callTool(name: string, args: Record<string, unknown>): Promise<MCPToolResult> {
     // Ensure tool map is populated
     if (this.toolSourceMap.size === 0) {
       await this.listAllTools();
     }
+
+    // Apply smart defaults for market tools to reduce context bloat
+    const modifiedArgs = this.applySmartDefaults(name, args);
 
     const source = this.toolSourceMap.get(name);
 
@@ -378,7 +483,7 @@ export class MCPClientManager {
     }
 
     if (source === 'discovery') {
-      const result = await this.discoveryClient.callTool(name, args);
+      const result = await this.discoveryClient.callTool(name, modifiedArgs);
       return { ...result, source: 'discovery' };
     }
 
@@ -389,7 +494,7 @@ export class MCPClientManager {
           error: `Polymarket trading not enabled. Run 'quantish init' to set up trading.`,
         };
       }
-      const result = await this.tradingClient.callTool(name, args);
+      const result = await this.tradingClient.callTool(name, modifiedArgs);
       return { ...result, source: 'trading' };
     }
 
@@ -400,7 +505,7 @@ export class MCPClientManager {
           error: `Kalshi trading not enabled. Run 'quantish init' to set up your Kalshi API key.`,
         };
       }
-      const result = await this.kalshiClient.callTool(name, args);
+      const result = await this.kalshiClient.callTool(name, modifiedArgs);
       return { ...result, source: 'kalshi' };
     }
 
@@ -411,13 +516,88 @@ export class MCPClientManager {
   }
 
   /**
+   * Apply smart defaults to tool arguments for context efficiency.
+   * This reduces context bloat by limiting large data returns.
+   */
+  private applySmartDefaults(toolName: string, args: Record<string, unknown>): Record<string, unknown> {
+    const modifiedArgs = { ...args };
+
+    // Market search tools - default to reasonable limits
+    if (toolName === 'search_markets') {
+      if (modifiedArgs.limit === undefined) {
+        modifiedArgs.limit = 15;  // Default to 15 markets instead of unlimited
+      }
+    }
+
+    if (toolName === 'get_trending_markets') {
+      if (modifiedArgs.limit === undefined) {
+        modifiedArgs.limit = 10;  // Default to 10 trending markets
+      }
+    }
+
+    if (toolName === 'find_arbitrage') {
+      if (modifiedArgs.limit === undefined) {
+        modifiedArgs.limit = 10;  // Default to top 10 arbitrage opportunities
+      }
+      if (modifiedArgs.min_profit === undefined) {
+        modifiedArgs.min_profit = 0.02;  // Default 2% minimum profit threshold
+      }
+    }
+
+    return modifiedArgs;
+  }
+
+  /**
    * Clear all caches
    */
   clearCache(): void {
     this.discoveryClient.clearCache();
     this.tradingClient?.clearCache();
+    this.kalshiClient?.clearCache();
     this.allToolsCache = null;
     this.toolSourceMap.clear();
+    this.allResourcesCache = null;
+  }
+
+  private allResourcesCache: MCPResource[] | null = null;
+
+  /**
+   * List all resources from the Trading MCP (which hosts documentation)
+   */
+  async listAllResources(): Promise<MCPResource[]> {
+    if (this.allResourcesCache) {
+      return this.allResourcesCache;
+    }
+
+    const allResources: MCPResource[] = [];
+
+    // Resources are primarily on the Trading MCP
+    if (this.tradingClient) {
+      try {
+        const tradingResources = await this.tradingClient.listResources();
+        allResources.push(...tradingResources);
+      } catch (error) {
+        console.warn('Failed to fetch Trading MCP resources:', error);
+      }
+    }
+
+    this.allResourcesCache = allResources;
+    return allResources;
+  }
+
+  /**
+   * Read a resource by URI
+   */
+  async readResource(uri: string): Promise<MCPResourceContent | null> {
+    // Resources are on the Trading MCP
+    if (this.tradingClient) {
+      try {
+        return await this.tradingClient.readResource(uri);
+      } catch (error) {
+        console.warn('Failed to read resource from Trading MCP:', error);
+      }
+    }
+    return null;
   }
 
   /**

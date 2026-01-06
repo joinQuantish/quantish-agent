@@ -1,14 +1,26 @@
 /**
  * File System Tools
- * 
+ *
  * Local tools for reading, writing, and listing files.
  * These run on the user's machine, not via MCP.
+ *
+ * Implements Claude Code-style patterns:
+ * - Default line limits on file reads
+ * - Line truncation for long lines
+ * - Read-before-write enforcement
+ * - Streaming for large files
  */
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { existsSync } from 'fs';
+import { existsSync, createReadStream } from 'fs';
+import * as readline from 'readline';
 import type { Tool } from '@anthropic-ai/sdk/resources/messages.js';
+
+// Constants for file reading (Claude Code patterns)
+const DEFAULT_LINE_LIMIT = 2000;      // Default max lines to read
+const MAX_LINE_LENGTH = 2000;         // Truncate lines longer than this
+const LARGE_FILE_THRESHOLD = 100000;  // Use streaming for files > 100KB
 
 export interface LocalToolResult {
   success: boolean;
@@ -16,48 +28,190 @@ export interface LocalToolResult {
   error?: string;
 }
 
+// Track files read in this session for read-before-write enforcement
+const filesReadInSession = new Set<string>();
+
 /**
- * Read a file from the filesystem
+ * Mark a file as read in this session
+ */
+export function markFileAsRead(filePath: string): void {
+  filesReadInSession.add(path.resolve(filePath));
+}
+
+/**
+ * Check if a file has been read in this session
+ */
+export function hasBeenRead(filePath: string): boolean {
+  return filesReadInSession.has(path.resolve(filePath));
+}
+
+/**
+ * Clear read tracking (for new sessions)
+ */
+export function clearReadTracking(): void {
+  filesReadInSession.clear();
+}
+
+/**
+ * Read a file from the filesystem with Claude Code-style efficiency:
+ * - Default line limit (2000 lines)
+ * - Line truncation for long lines
+ * - Streaming for large files
+ * - Returns metadata about file
  */
 export async function readFile(filePath: string, options?: { offset?: number; limit?: number }): Promise<LocalToolResult> {
   try {
     const resolvedPath = path.resolve(filePath);
-    
+
     if (!existsSync(resolvedPath)) {
       return { success: false, error: `File not found: ${filePath}` };
     }
 
-    const content = await fs.readFile(resolvedPath, 'utf-8');
-    
-    if (options?.offset !== undefined || options?.limit !== undefined) {
-      const lines = content.split('\n');
-      const start = options.offset ?? 0;
-      const end = options.limit ? start + options.limit : lines.length;
-      const selectedLines = lines.slice(start, end);
-      
-      // Add line numbers
-      const numbered = selectedLines.map((line, i) => `${(start + i + 1).toString().padStart(6)}|${line}`).join('\n');
-      return { success: true, data: numbered };
+    // Get file stats
+    const stats = await fs.stat(resolvedPath);
+    const fileSizeBytes = stats.size;
+    const fileSizeKB = Math.round(fileSizeBytes / 1024);
+
+    // Mark file as read for read-before-write tracking
+    markFileAsRead(resolvedPath);
+
+    const startLine = options?.offset ?? 0;
+    const maxLines = options?.limit ?? DEFAULT_LINE_LIMIT;
+
+    // For large files, use streaming
+    if (fileSizeBytes > LARGE_FILE_THRESHOLD) {
+      return await readFileStreaming(resolvedPath, startLine, maxLines, fileSizeKB);
     }
 
-    return { success: true, data: content };
+    // For smaller files, read all at once then slice
+    const content = await fs.readFile(resolvedPath, 'utf-8');
+    const allLines = content.split('\n');
+    const totalLines = allLines.length;
+
+    // Slice to requested range
+    const selectedLines = allLines.slice(startLine, startLine + maxLines);
+
+    // Format with line numbers and truncate long lines
+    const numbered = selectedLines.map((line, i) => {
+      const lineNum = (startLine + i + 1).toString().padStart(6);
+      const truncatedLine = line.length > MAX_LINE_LENGTH
+        ? line.slice(0, MAX_LINE_LENGTH) + '...[truncated]'
+        : line;
+      return `${lineNum}\t${truncatedLine}`;
+    }).join('\n');
+
+    const hasMore = totalLines > startLine + maxLines;
+
+    return {
+      success: true,
+      data: {
+        content: numbered,
+        metadata: {
+          path: resolvedPath,
+          totalLines,
+          linesReturned: selectedLines.length,
+          startLine,
+          hasMore,
+          fileSizeKB,
+          nextOffset: hasMore ? startLine + maxLines : null,
+        },
+      },
+    };
   } catch (error) {
     return { success: false, error: `Failed to read file: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
 /**
+ * Stream-based file reading for large files
+ */
+async function readFileStreaming(
+  filePath: string,
+  startLine: number,
+  maxLines: number,
+  fileSizeKB: number
+): Promise<LocalToolResult> {
+  return new Promise((resolve) => {
+    const lines: string[] = [];
+    let lineNum = 0;
+    let totalLines = 0;
+
+    const rl = readline.createInterface({
+      input: createReadStream(filePath, { encoding: 'utf-8' }),
+      crlfDelay: Infinity,
+    });
+
+    rl.on('line', (line) => {
+      totalLines++;
+
+      if (lineNum >= startLine && lines.length < maxLines) {
+        const lineNumStr = (lineNum + 1).toString().padStart(6);
+        const truncatedLine = line.length > MAX_LINE_LENGTH
+          ? line.slice(0, MAX_LINE_LENGTH) + '...[truncated]'
+          : line;
+        lines.push(`${lineNumStr}\t${truncatedLine}`);
+      }
+
+      lineNum++;
+
+      // Stop reading if we have enough lines and are past what we need
+      if (lines.length >= maxLines && lineNum > startLine + maxLines + 1000) {
+        rl.close();
+      }
+    });
+
+    rl.on('close', () => {
+      const hasMore = totalLines > startLine + maxLines;
+
+      resolve({
+        success: true,
+        data: {
+          content: lines.join('\n'),
+          metadata: {
+            path: filePath,
+            totalLines: totalLines,
+            linesReturned: lines.length,
+            startLine,
+            hasMore,
+            fileSizeKB,
+            nextOffset: hasMore ? startLine + maxLines : null,
+            streamed: true,
+          },
+        },
+      });
+    });
+
+    rl.on('error', (error) => {
+      resolve({ success: false, error: `Failed to read file: ${error.message}` });
+    });
+  });
+}
+
+/**
  * Write content to a file
+ * Enforces read-before-write for existing files
  */
 export async function writeFile(filePath: string, content: string): Promise<LocalToolResult> {
   try {
     const resolvedPath = path.resolve(filePath);
     const dir = path.dirname(resolvedPath);
-    
+
+    // Enforce read-before-write for existing files
+    if (existsSync(resolvedPath) && !hasBeenRead(resolvedPath)) {
+      return {
+        success: false,
+        error: `SAFETY CHECK: "${filePath}" already exists. You must use read_file("${filePath}") FIRST, then call write_file again with your content. Do NOT run any bash commands - just call read_file.`
+      };
+    }
+
     // Create directory if it doesn't exist
     await fs.mkdir(dir, { recursive: true });
-    
+
     await fs.writeFile(resolvedPath, content, 'utf-8');
+
+    // Mark as read after writing (so subsequent writes don't require re-read)
+    markFileAsRead(resolvedPath);
+
     return { success: true, data: { path: resolvedPath, bytesWritten: Buffer.byteLength(content) } };
   } catch (error) {
     return { success: false, error: `Failed to write file: ${error instanceof Error ? error.message : String(error)}` };
@@ -227,18 +381,27 @@ export async function workspaceSummary(
 /**
  * Edit a file using search/replace
  * This is safer than full overwrite as it only modifies specific parts
+ * Enforces read-before-write
  */
 export async function editFile(
-  filePath: string, 
-  oldString: string, 
+  filePath: string,
+  oldString: string,
   newString: string,
   options?: { replaceAll?: boolean }
 ): Promise<LocalToolResult> {
   try {
     const resolvedPath = path.resolve(filePath);
-    
+
     if (!existsSync(resolvedPath)) {
       return { success: false, error: `File not found: ${filePath}` };
+    }
+
+    // Enforce read-before-write
+    if (!hasBeenRead(resolvedPath)) {
+      return {
+        success: false,
+        error: `SAFETY CHECK: You must use read_file("${filePath}") FIRST before editing. Do NOT run bash commands - just call read_file to see the current content.`
+      };
     }
 
     const content = await fs.readFile(resolvedPath, 'utf-8');
@@ -288,7 +451,23 @@ export async function editFile(
 export const filesystemTools: Tool[] = [
   {
     name: 'read_file',
-    description: 'Read the contents of a file from the local filesystem. Returns the file content as text. Supports optional line offset and limit for large files.',
+    description: `Read a file's contents. ALWAYS use this before editing or writing to a file.
+
+USE THIS WHEN:
+- You need to see what's in a file
+- Before using edit_file (required)
+- Before using write_file on existing files (required)
+- Understanding code structure
+
+FEATURES:
+- Returns content with line numbers
+- Default: 2000 lines max (use offset/limit for more)
+- Long lines (>2000 chars) are truncated
+- Large files use streaming
+
+For large files, paginate:
+- First: read_file(path) → lines 1-2000
+- Next: read_file(path, offset=2000) → lines 2001-4000`,
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -298,11 +477,11 @@ export const filesystemTools: Tool[] = [
         },
         offset: {
           type: 'number',
-          description: 'Optional: Start reading from this line number (0-indexed)',
+          description: 'Optional: Start reading from this line number (0-indexed). Default: 0',
         },
         limit: {
           type: 'number',
-          description: 'Optional: Maximum number of lines to read',
+          description: 'Optional: Maximum number of lines to read. Default: 2000',
         },
       },
       required: ['path'],
@@ -310,7 +489,14 @@ export const filesystemTools: Tool[] = [
   },
   {
     name: 'write_file',
-    description: 'Write content to a file on the local filesystem. Creates the file if it doesn\'t exist, or overwrites if it does. Creates parent directories as needed.',
+    description: `Write content to a file on the local filesystem.
+
+IMPORTANT: You must read existing files with read_file BEFORE writing to them.
+This prevents accidentally overwriting content you haven't seen.
+
+Creates parent directories as needed. Overwrites existing content.
+
+Prefer edit_file for making targeted changes to existing files.`,
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -370,7 +556,20 @@ export const filesystemTools: Tool[] = [
   },
   {
     name: 'edit_file',
-    description: 'Edit a file by replacing a specific string with new content. Safer than write_file as it only modifies the targeted section. The old_string must match exactly (including whitespace).',
+    description: `Edit a file by replacing a specific string with new content.
+
+IMPORTANT: You must read the file with read_file BEFORE editing.
+This ensures you have the exact string to match.
+
+The old_string must:
+- Match EXACTLY (including whitespace and indentation)
+- Be unique in the file (unless using replace_all)
+- Include enough context to be unambiguous
+
+Tips for successful edits:
+- Copy the exact text from read_file output
+- Include surrounding lines if the target isn't unique
+- Use replace_all: true for renaming variables`,
     input_schema: {
       type: 'object' as const,
       properties: {

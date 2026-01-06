@@ -35,7 +35,7 @@ const DEFAULT_MCP_URL = DEFAULT_TRADING_MCP_URL;
 
 // Default models per provider
 export const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-5-20250929';
-export const DEFAULT_OPENROUTER_MODEL = 'z-ai/glm-4.7';
+export const DEFAULT_OPENROUTER_MODEL = 'anthropic/claude-haiku-4.5';
 
 const schema = {
   anthropicApiKey: {

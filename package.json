@@ -1,6 +1,6 @@
 {
   "name": "@quantish/agent",
-  "version": "0.1.51",
+  "version": "0.1.65",
   "description": "AI-powered agent for trading on Polymarket and Kalshi",
   "type": "module",
   "bin": {
@@ -56,9 +56,10 @@
     "chalk": "^5.3.0",
     "commander": "^12.1.0",
     "conf": "^13.0.1",
+    "fast-glob": "^3.3.3",
     "ink": "^5.0.1",
-    "ink-text-input": "^6.0.0",
     "ink-spinner": "^5.0.0",
+    "ink-text-input": "^6.0.0",
     "ora": "^8.1.1",
     "react": "^18.3.1"
   },

@@ -1,11 +1,17 @@
 /**
  * Shell/Command Tools
- * 
+ *
  * Execute shell commands on the user's machine with safety guardrails.
+ * Search tools (grep, findFiles) use native Node.js for performance.
  */
 
 import { spawn, exec } from 'child_process';
 import { promisify } from 'util';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import { createReadStream } from 'fs';
+import * as readline from 'readline';
+import fg from 'fast-glob';
 import type { Tool } from '@anthropic-ai/sdk/resources/messages.js';
 import type { LocalToolResult } from './filesystem.js';
 import { processManager } from './process-manager.js';
@@ -197,101 +203,203 @@ export async function runCommand(
 }
 
 /**
- * Search for text in files using grep/ripgrep
+ * Output mode for grep results (Claude Code pattern)
+ */
+export type GrepOutputMode = 'files_only' | 'content' | 'count';
+
+// Directories to ignore when searching (Claude Code pattern)
+const IGNORED_DIRS = ['node_modules', '.git', 'dist', 'build', '.next', '__pycache__', 'venv', '.venv', 'coverage', '.cache'];
+
+// Binary extensions to skip
+const BINARY_EXTS = ['.png', '.jpg', '.jpeg', '.gif', '.ico', '.pdf', '.zip', '.tar', '.gz', '.exe', '.dll', '.so', '.woff', '.woff2', '.ttf', '.eot', '.mp3', '.mp4', '.mov', '.avi'];
+
+/**
+ * Search for text in files using NATIVE Node.js (Claude Code pattern)
+ * No shell commands - pure JavaScript for speed and reliability
  */
 export async function grep(
   pattern: string,
-  path: string,
-  options: { ignoreCase?: boolean; contextLines?: number } = {}
+  searchPath: string,
+  options: {
+    ignoreCase?: boolean;
+    contextLines?: number;
+    outputMode?: GrepOutputMode;
+    limit?: number;
+    glob?: string;
+  } = {}
 ): Promise<LocalToolResult> {
-  const { ignoreCase = false, contextLines = 0 } = options;
-
-  // Try ripgrep first, fall back to grep
-  const rgArgs = [
-    pattern,
-    path,
-    '--no-heading',
-    '--line-number',
-    '--color=never',
-  ];
-
-  if (ignoreCase) rgArgs.push('-i');
-  if (contextLines > 0) rgArgs.push(`-C${contextLines}`);
+  const {
+    ignoreCase = false,
+    outputMode = 'files_only',
+    limit = 100,
+  } = options;
 
   try {
-    const { stdout } = await execPromise(`rg ${rgArgs.join(' ')}`, {
-      timeout: 30000,
-      maxBuffer: 10 * 1024 * 1024,
+    // Create regex from pattern
+    const flags = ignoreCase ? 'gi' : 'g';
+    let regex: RegExp;
+    try {
+      regex = new RegExp(pattern, flags);
+    } catch {
+      return { success: false, error: `Invalid regex pattern: ${pattern}` };
+    }
+
+    const resolvedPath = path.resolve(searchPath);
+    const stats = await fs.stat(resolvedPath).catch(() => null);
+    if (!stats) {
+      return { success: false, error: `Path not found: ${searchPath}` };
+    }
+
+    // Single file search
+    if (stats.isFile()) {
+      const hasMatch = await fileHasMatch(resolvedPath, regex);
+      if (hasMatch) {
+        if (outputMode === 'files_only') {
+          return { success: true, data: { matches: [searchPath], pattern, path: searchPath, outputMode, totalMatches: 1 } };
+        }
+        const content = await fs.readFile(resolvedPath, 'utf-8');
+        const lines = content.split('\n');
+        const matches: string[] = [];
+        lines.forEach((line, i) => {
+          regex.lastIndex = 0;
+          if (regex.test(line)) {
+            matches.push(`${i + 1}:${line}`);
+          }
+        });
+        return { success: true, data: { matches: matches.slice(0, limit), pattern, path: searchPath, outputMode, totalMatches: matches.length } };
+      }
+      return { success: true, data: { matches: [], pattern, path: searchPath, outputMode, totalMatches: 0 } };
+    }
+
+    // Directory search using fast-glob
+    const globPattern = options.glob
+      ? path.join(resolvedPath, '**', options.glob)
+      : path.join(resolvedPath, '**', '*');
+
+    const files = await fg(globPattern, {
+      ignore: IGNORED_DIRS.map(d => `**/${d}/**`),
+      onlyFiles: true,
+      followSymbolicLinks: false,
+      suppressErrors: true,
+      absolute: true,
     });
+
+    const matches: string[] = [];
+    const counts: Map<string, number> = new Map();
+    let totalMatches = 0;
+
+    for (const file of files) {
+      if (matches.length >= limit && outputMode !== 'count') break;
+
+      const ext = path.extname(file).toLowerCase();
+      if (BINARY_EXTS.includes(ext)) continue;
+
+      try {
+        const content = await fs.readFile(file, 'utf-8');
+        const lines = content.split('\n');
+        const relativePath = path.relative(process.cwd(), file);
+        let fileMatchCount = 0;
+
+        for (let i = 0; i < lines.length; i++) {
+          regex.lastIndex = 0;
+          if (regex.test(lines[i])) {
+            fileMatchCount++;
+            if (outputMode === 'content' && matches.length < limit) {
+              matches.push(`${relativePath}:${i + 1}:${lines[i]}`);
+            }
+          }
+        }
+
+        if (fileMatchCount > 0) {
+          if (outputMode === 'files_only' && matches.length < limit) {
+            matches.push(relativePath);
+          }
+          if (outputMode === 'count') {
+            counts.set(relativePath, fileMatchCount);
+          }
+          totalMatches += outputMode === 'files_only' ? 1 : fileMatchCount;
+        }
+      } catch {
+        // Skip files that can't be read
+      }
+    }
+
+    const finalMatches = outputMode === 'count'
+      ? Array.from(counts.entries()).map(([f, c]) => `${f}:${c}`)
+      : matches;
 
     return {
       success: true,
       data: {
-        matches: stdout.trim().split('\n').filter(Boolean),
+        matches: finalMatches.slice(0, limit),
         pattern,
-        path,
+        path: searchPath,
+        outputMode,
+        totalMatches,
+        truncated: finalMatches.length > limit,
       },
     };
-  } catch {
-    // Try grep as fallback
-    try {
-      const grepArgs = [
-        ignoreCase ? '-i' : '',
-        contextLines > 0 ? `-C${contextLines}` : '',
-        '-rn',
-        pattern,
-        path,
-      ].filter(Boolean);
-
-      const { stdout } = await execPromise(`grep ${grepArgs.join(' ')}`, {
-        timeout: 30000,
-        maxBuffer: 10 * 1024 * 1024,
-      });
-
-      return {
-        success: true,
-        data: {
-          matches: stdout.trim().split('\n').filter(Boolean),
-          pattern,
-          path,
-        },
-      };
-    } catch (error: unknown) {
-      const execError = error as { code?: number; message?: string };
-      // grep returns exit code 1 if no matches (not an error)
-      if (execError.code === 1) {
-        return { success: true, data: { matches: [], pattern, path } };
-      }
-      return { success: false, error: `Search failed: ${execError.message}` };
-    }
+  } catch (error) {
+    return { success: false, error: `Search failed: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
 /**
- * Find files by name pattern using glob
+ * Quick check if a file contains a pattern match
+ */
+async function fileHasMatch(filePath: string, regex: RegExp): Promise<boolean> {
+  try {
+    const content = await fs.readFile(filePath, 'utf-8');
+    regex.lastIndex = 0;
+    return regex.test(content);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Find files by name pattern using NATIVE Node.js glob (Claude Code pattern)
  */
 export async function findFiles(
   pattern: string,
   directory: string = '.'
 ): Promise<LocalToolResult> {
   try {
-    // Use find command with name pattern
-    const { stdout } = await execPromise(
-      `find "${directory}" -name "${pattern}" -type f 2>/dev/null | head -100`,
-      { timeout: 30000, maxBuffer: 10 * 1024 * 1024 }
-    );
+    const resolvedDir = path.resolve(directory);
+
+    // Convert simple wildcard pattern to glob pattern
+    // e.g., "*agent*" -> "**/*agent*"
+    const globPattern = pattern.includes('/') || pattern.includes('**')
+      ? pattern
+      : `**/${pattern}`;
+
+    const fullPattern = path.join(resolvedDir, globPattern);
+
+    const files = await fg(fullPattern, {
+      ignore: IGNORED_DIRS.map(d => `**/${d}/**`),
+      onlyFiles: true,
+      followSymbolicLinks: false,
+      suppressErrors: true,
+      dot: false,
+    });
+
+    // Return relative paths, limited to 100
+    const relativePaths = files
+      .map(f => path.relative(process.cwd(), f))
+      .slice(0, 100);
 
     return {
       success: true,
       data: {
-        files: stdout.trim().split('\n').filter(Boolean),
+        files: relativePaths,
         pattern,
         directory,
+        totalFound: files.length,
+        truncated: files.length > 100,
       },
     };
-  } catch (error: unknown) {
-    const execError = error as { message?: string };
-    return { success: false, error: `Find failed: ${execError.message}` };
+  } catch (error) {
+    return { success: false, error: `Find failed: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -334,44 +442,88 @@ BEST PRACTICES:
     },
   },
   {
-    name: 'grep',
-    description: 'Search for a text pattern in files. Uses ripgrep if available, falls back to grep. Returns matching lines with file paths and line numbers.',
+    name: 'glob',
+    description: `Fast file pattern matching - find files by NAME/PATH pattern.
+
+USE THIS WHEN:
+- Looking for files by name: "*.ts", "package.json", "**/*.test.js"
+- Finding files in specific directories: "src/**/*.tsx"
+- Locating config files, specific file types, etc.
+
+DO NOT USE FOR:
+- Searching file CONTENTS (use grep instead)
+
+Examples:
+- glob("*.ts") → finds all TypeScript files
+- glob("**/package.json") → finds all package.json files
+- glob("src/**/*.test.ts") → finds all test files in src
+
+Returns file paths only (not content). Use read_file to see contents.`,
     input_schema: {
       type: 'object' as const,
       properties: {
         pattern: {
           type: 'string',
-          description: 'The regex pattern to search for',
-        },
-        path: {
-          type: 'string',
-          description: 'The file or directory to search in',
-        },
-        ignore_case: {
-          type: 'boolean',
-          description: 'Optional: Case-insensitive search (default: false)',
-        },
-        context_lines: {
-          type: 'number',
-          description: 'Optional: Number of context lines before and after matches',
-        },
-      },
-      required: ['pattern', 'path'],
-    },
-  },
-  {
-    name: 'find_files',
-    description: 'Find files by name pattern (glob). Returns up to 100 matching file paths.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        pattern: {
-          type: 'string',
-          description: 'The glob pattern to match (e.g., "*.ts", "package.json")',
+          description: 'Glob pattern: *.ts, **/*.json, src/**/*.tsx, etc.',
         },
         directory: {
           type: 'string',
           description: 'Optional: Directory to search in (default: current directory)',
+        },
+      },
+      required: ['pattern'],
+    },
+  },
+  {
+    name: 'grep',
+    description: `Search file CONTENTS for text/regex patterns.
+
+USE THIS WHEN:
+- Searching for code: function names, imports, variable usage
+- Finding text in files: error messages, TODOs, specific strings
+- Locating where something is defined or used
+
+DO NOT USE FOR:
+- Finding files by name (use glob instead)
+
+OUTPUT MODES:
+- files_only (default): Just file paths - use this FIRST
+- content: Matching lines with line numbers
+- count: Match count per file
+
+BEST PRACTICE:
+1. grep with files_only → see which files match
+2. read_file on specific file → see the context
+3. Only use content mode if you need inline matches
+
+Automatically ignores: node_modules, .git, dist, build`,
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        pattern: {
+          type: 'string',
+          description: 'Regex pattern to search for in file contents',
+        },
+        path: {
+          type: 'string',
+          description: 'File or directory to search in (default: current directory)',
+        },
+        output_mode: {
+          type: 'string',
+          enum: ['files_only', 'content', 'count'],
+          description: 'files_only (default), content (lines), or count',
+        },
+        ignore_case: {
+          type: 'boolean',
+          description: 'Case-insensitive search (default: false)',
+        },
+        glob: {
+          type: 'string',
+          description: 'Filter to specific file types: "*.ts", "*.py", etc.',
+        },
+        limit: {
+          type: 'number',
+          description: 'Max results (default: 100)',
         },
       },
       required: ['pattern'],
@@ -570,11 +722,15 @@ export async function executeShellTool(name: string, args: Record<string, unknow
         timeout: args.timeout as number | undefined,
       });
     case 'grep':
-      return grep(args.pattern as string, args.path as string, {
+      return grep(args.pattern as string, args.path as string || '.', {
         ignoreCase: args.ignore_case as boolean | undefined,
         contextLines: args.context_lines as number | undefined,
+        outputMode: args.output_mode as GrepOutputMode | undefined,
+        limit: args.limit as number | undefined,
+        glob: args.glob as string | undefined,
       });
-    case 'find_files':
+    case 'glob':
+    case 'find_files':  // Backwards compatibility
       return findFiles(args.pattern as string, args.directory as string | undefined);
     case 'start_background_process':
       return startBackgroundProcess(args.command as string, {

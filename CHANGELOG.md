@@ -5,130 +5,59 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.48] - 2024-12-30
-
-### Fixed
-- **OpenRouter Model Selection Bug**: Fixed critical bug where selecting OpenRouter models (like `glm`) would fail with a 404 error
-  - The `resolveModelId` function was incorrectly returning OpenRouter model IDs, preventing the provider auto-switch
-  - Now correctly detects OpenRouter models and auto-switches provider before making API calls
-  - `/model glm` and other OpenRouter shortcuts now work correctly
-
-## [0.1.47] - 2024-12-30
+## [0.1.65] - 2025-01-06
 
 ### Added
-- **`workspace_summary` Tool**: New tool to get a tree-view of directory structure after scaffolding
-  - Shows file sizes, skips node_modules/.git/dist
-  - Perfect for verifying project creation after `npx create-react-app`, etc.
+- **MCP Resources Support**
+  - New `list_resources` tool to discover available API documentation
+  - New `read_resource` tool to fetch on-demand documentation
+  - Resources include Polymarket (overview, Gamma API, CLOB API) and Kalshi (overview, DFlow, Jupiter) docs
+  - Agent now reads documentation before starting tasks for better accuracy
 
-### Fixed
-- **Extended Timeouts for Scaffolding Commands**: Fixed `npx create-react-app` and similar commands timing out
-  - Added 10-minute timeout for scaffolding: `npx create-*`, `bunx create-*`, `pnpm create`, `yarn create`
-  - Added 3-minute default for all `npx` commands
-  - Prevents agent getting stuck on long-running project creation
-
-### Improved
-- **Better Tool Descriptions**: Clearer guidance on when to use `run_command` vs `start_background_process`
-- **System Prompt for App Building**: Added explicit instructions for building applications
-  - Use `--yes` flag for npx commands
-  - Verify with `workspace_summary` after scaffolding
-  - Use background processes for dev servers
-
-## [0.1.45] - 2024-12-30
-
-### Fixed
-- **Agent now displays prices in market tables**: Updated system prompt to explicitly instruct agent to include outcome prices (Yes/No probabilities) when presenting search results
-- Response data includes prices but agent wasn't showing them - now fixed via prompt guidance
-
-## [0.1.44] - 2024-12-30
-
-### Added
-- **AbortSignal Support**: Escape key now properly cancels agent execution mid-loop
-  - New `abortSignal` option in `agent.run()` for programmatic cancellation
-  - Checks abort status at each iteration and during tool execution
-  
-- **Tool Call Loop Detection**: Prevents agent from getting stuck in loops
-  - Detects when the same tool is called 3+ times with identical input
-  - Automatically stops loop and returns helpful error message
-  
-- **maxTurns Config Option**: Limit total agent turns per request (defaults to 15/200)
-
-### Fixed
-- Escape key interrupt now works immediately during agent processing
-- Agent no longer repeats failed tool calls indefinitely
-
-## [0.1.42] - 2024-12-30
-
-### Fixed
-- **Reduced Excessive Tool Calls**: Rewrote system prompt to prevent agent from making dozens of redundant tool calls
-  - Agent now makes ONE search call and immediately presents results
-  - No longer calls `get_market_details` on every single search result
-  - No longer makes parallel searches with slight query variations
-
-### Added
-- **Preserved App/Bot Building**: Re-added detailed coding tools documentation
-  - Background process management (start_background_process, get_process_output, stop_process)
-  - Git operations (status, diff, add, commit)
-  - API endpoint documentation for building standalone apps
-  - Clear guidance for when user wants to build trading bots
-
-## [0.1.40] - 2024-12-30
-
-### Fixed
-- **Discovery MCP Search Priority**: Fixed `search_markets` returning limited results by ensuring Discovery MCP's cross-platform semantic search tools take precedence over Trading MCP's Polymarket-only search
-  - `search_markets`, `get_trending_markets`, `get_market_details`, `get_categories`, `get_market_stats`, `get_search_status`, and `find_arbitrage` now always use Discovery MCP
-  - This enables searching across Polymarket, Kalshi, and Limitless with semantic/hybrid search
-  - Trading MCP search tools are no longer accidentally overwriting Discovery tools
-
-## [0.1.15] - 2024-12-29
-
-### Added
-- **`edit_lines` Tool**: New line-targeted editing tool that uses line numbers instead of full string matching
-  - Much more token-efficient: sends `start_line`, `end_line`, `new_content` instead of full `old_string`
-  - Agent guided to prefer `edit_lines` over `edit_file` when line numbers are known
+- **Improved Agent Intelligence**
+  - Mandatory resource reading before Polymarket/Kalshi tasks
+  - CORS-aware app building (knows frontend can't call Gamma API directly)
+  - Backend proxy patterns documented for React/Vue apps
+  - Active market filtering guidance (closed=false, active=true)
 
 ### Changed
-- Tool descriptions updated to guide agent toward more efficient editing patterns
-
-## [0.1.14] - 2024-12-29
-
-### Changed
-- **Unlimited Tool Calling Loop**: Removed arbitrary 15-iteration limit; agent now runs until LLM stops (safety cap at 200)
-- **Clearer API Response Docs**: System prompt now includes detailed field paths for both `search_markets` and `get_market_details` responses
-- **Streamlined System Prompt**: Further reduced prompt size while adding critical response structure documentation
+- System prompt now requires reading resources first for prediction market tasks
+- Improved guidance for building apps that display market data
+- Enhanced Gamma API documentation with active market filters
 
 ### Fixed
-- Agent no longer stops mid-task due to iteration limit
-- Agent now correctly maps response fields (id, marketId, outcomes, clobTokenIds, conditionId)
+- Agent no longer attempts direct Gamma API calls from frontend code
+- Market queries now properly filter for active (non-closed) markets
 
-## [0.1.7] - 2024-12-28
+## [0.1.16] - 2024-12-29
 
 ### Added
-- **Self-Hosting Support**
-  - `quantish config --server <url>` command to set custom Trading MCP server URL
-  - `MCP_SERVER_URL` environment variable support (takes precedence)
-  - New self-hosting documentation page
+- **OpenRouter Integration**
+  - Full support for OpenRouter as an alternative LLM provider
+  - Access to 100+ models including MiniMax M2.1, DeepSeek V3.2, Gemini 3, Grok 4.1, and more
+  - New `/provider` command to switch between Anthropic and OpenRouter
+  - Automatic provider switching when using OpenRouter model names
+  - Token and cost tracking for OpenRouter models
+  - OpenAI-compatible tool calling via OpenRouter API
 
-- **Application Building Improvements**
-  - Enhanced system prompt with complete MCP HTTP API documentation
-  - Separate instructions for Trading API (JSON-RPC 2.0) vs Discovery API (simple format)
-  - `setup_env` tool for managing `.env` files in generated applications
-  - Strict code generation rules preventing hardcoded values
-  - Explicit warning against using MCP SDK in standalone apps
+- **New Models Available**
+  - MiniMax M2.1 - Ultra cost-effective ($0.30/MTok input) with strong coding/agentic capabilities
+  - DeepSeek V3.2 - GPT-5 class reasoning at $0.22/MTok
+  - Mistral Devstral 2 - Free tier available for testing
+  - Google Gemini 3 Flash/Pro - 1M context window
+  - xAI Grok 4.1 Fast - 2M context, best for tool calling
+  - Many more via OpenRouter
 
-- **UI Improvements**
-  - Better real-time feedback during tool execution (spinner + "Running...")
-  - Escape key now properly interrupts ongoing agent operations
+- **Configuration Updates**
+  - `OPENROUTER_API_KEY` environment variable support
+  - `/provider anthropic|openrouter` command
+  - Enhanced `/model` command shows both Anthropic and OpenRouter models
+  - `quantish config` displays provider and OpenRouter key status
 
-- **Documentation**
-  - Updated README with correct `@quantish/agent` package name
-  - Complete MCP HTTP API documentation with code examples
-  - Self-hosting guide with deployment options
-  - Fixed navigation links throughout docs site
-
-### Fixed
-- Discovery API now uses correct simple `{name, arguments}` format instead of JSON-RPC
-- AbortSignal properly passed to Anthropic API calls for interrupt handling
-- Tool call UI now shows pending state before execution completes
+### Changed
+- Agent loop now uses provider abstraction for cleaner multi-provider support
+- `/model` command auto-switches provider when using OpenRouter model IDs
+- Config export now includes provider setting
 
 ## [0.1.0] - 2024-12-28
 
@@ -194,4 +123,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Custom tool definitions
 - Multi-agent orchestration
 - Automated trading strategies
+
+
 
