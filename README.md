@@ -1,3 +1,5 @@
+> **⚠️ Notice: Quantish is no longer active.** The Quantish platform and all hosted services (quantish.live, MCP servers, hosted APIs) are shutting down. The hosted MCP endpoints referenced in this README are no longer available. If you want to run trading MCP servers, see the self-hosted repos: [polymarket-mcp](https://github.com/joinQuantish/polymarket-mcp), [limitless-mcp](https://github.com/joinQuantish/limitless-mcp), [kalshi-mcp](https://github.com/joinQuantish/kalshi-mcp). For real-time prediction market data infrastructure, check out [polynode.dev](https://polynode.dev).
+
 # @quantish/agent (V1)
 
 AI-powered coding & trading agent for Polymarket and Kalshi. Build trading bots, analyze markets, and execute trades using natural language.
